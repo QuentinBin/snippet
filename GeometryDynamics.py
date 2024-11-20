@@ -33,3 +33,4 @@ Span_tail = 0.25
 # Pectoral Fin
 Chord_fin = 0.10
 Span_fin = 0.35
+
