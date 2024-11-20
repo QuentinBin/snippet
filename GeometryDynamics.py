@@ -3,7 +3,7 @@ Description: Geometric Methods for Modeling and Control of Free-Swimming Fin-Act
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-20 09:10:33
-LastEditTime: 2024-11-20 15:59:10
+LastEditTime: 2024-11-20 16:03:55
 '''
 import numpy as np
 
