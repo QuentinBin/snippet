@@ -3,7 +3,7 @@ Description: Geometric Methods for Modeling and Control of Free-Swimming Fin-Act
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-20 09:10:33
-LastEditTime: 2024-11-20 14:14:36
+LastEditTime: 2024-11-20 14:37:29
 '''
 import numpy as np
 
@@ -43,6 +43,7 @@ class Fish():
             self._CalculateMassInertiaMatix_Ellipsoid(self._Length_body, self._Width_body, self._Height_body, 1, self._Mass_body)
         self._MassMatrix_Tail, self._InertiaMatrix_Tail = \
             self._CalculateMassInertiaMatix_FlatPlate(self._Chord_tail, self._Span_tail, 1, self._Mass_tail)
+    
     def _CalculateMassInertiaMatix_Ellipsoid(self, a1, a2, a3, rho, m):
         """
         计算椭球体的附加质量和附加惯性
