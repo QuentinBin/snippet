@@ -3,10 +3,10 @@ Description: Geometric Methods for Modeling and Control of Free-Swimming Fin-Act
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-20 09:10:33
-LastEditTime: 2024-11-20 16:03:55
+LastEditTime: 2024-11-20 16:07:55
 '''
-import numpy as np
 
+import numpy as np
 
 class Fish():
     def __init__(self):
@@ -113,9 +113,11 @@ class Fish():
         # Calculate the forces
         Lf1 = 4 * np.pi * d * Vf1 * (Vf1 + d * omega_f)
         Lf2 = 4 * np.pi * d * Vf2 * (Vf1 + d * omega_f)
+        Lf3 = 4 * np.pi * d * Vf2 * (Vf1 + d * omega_f)
         
-        return Lf1, Lf2
+        return Lf1, Lf2, Lf3
     
 
 if __name__ == '__main__':
     fish = Fish()
+    fish1 = Fish()
