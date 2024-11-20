@@ -113,11 +113,9 @@ class Fish():
         # Calculate the forces
         Lf1 = 4 * np.pi * d * Vf1 * (Vf1 + d * omega_f)
         Lf2 = 4 * np.pi * d * Vf2 * (Vf1 + d * omega_f)
-        Lf3 = 4 * np.pi * d * Vf2 * (Vf1 + d * omega_f)
         
-        return Lf1, Lf2, Lf3
+        return Lf1, Lf2
     
 
 if __name__ == '__main__':
     fish = Fish()
-    fish1 = Fish()
