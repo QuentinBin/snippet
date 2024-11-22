@@ -1,43 +1,53 @@
 import numpy as np
 
 class WaterObject:
-    def __init__(self, id=0, parent_id=None, shape=None, center=np.array([[0],[0],[0]]), velocity=np.array([[0],[0],[0]]), omega=np.array([[0],[0],[0]]), **kwargs):
+    def __init__(self, shape, **kwargs):
         """
-        Frame: LCS 
-        
-        :param shape: String('ellipsoid', 'plate', etc.) 
-        :param center,velocity,omega: Array(3,1) 
-        :param id,parent_id: int
-        :param karwg: a=2.0, b=1.5, c=1.0 // l=1
+        初始化水中物体。
+        :param shape: 物体的形状类型 ('ellipsoid', 'plate', etc.)
+        :param kwargs: 形状参数及运动参数。
         """
-        self._shape = shape
-        self._velocity = velocity
-        self._omega = omega
-        self._id = id
-        self._parent_id = parent_id
-        self._shape_param = kwargs
-        # Initialize Lie Group in {WCS}
-        self._SE3 = np.eye(4)
-        self._se3 = np.zeros([6,1])
-        self._se3_matrix = np.zeros([4,4])
+        self.shape = shape
+        self.params = kwargs
+        self.center = np.array(kwargs.get("center", [0.0, 0.0, 0.0]), dtype=np.float64)
+        self.velocity = np.array(kwargs.get("velocity", [0.0, 0.0, 0.0]), dtype=np.float64)
+        self.omega = np.array(kwargs.get("omega", [0.0, 0.0, 0.0]), dtype=np.float64)
+        self.orientation = np.eye(3, dtype=np.float32)  # 初始方向矩阵
+
+    def set_motion(self, velocity, omega):
+        """设置物体的速度和角速度。"""
+        self.velocity = np.array(velocity, dtype=np.float64)
+        self.omega = np.array(omega, dtype=np.float64)
+
+    def update_position(self, dt):
+        """根据速度更新位置。"""
+        self.center += self.velocity * dt
+
+    def update_pose(self, joint_rotation):
+        """
+        更新物体的旋转矩阵和位置。
+        :param joint_rotation: 关节旋转矩阵 (3x3 的 numpy 数组)。
+        :param dt: 时间步长 (float)。
+        """
+        self.orientation = joint_rotation @ self.orientation  # 更新方向
+
     
     def _calculate_normals(self, points):
         """
-        计算边界点的法向量。 
-         
-        :param points: Boundary Point Array(Nx3,Frame{LCS}).
-        :return out: Normal Array(Nx3,Frame{LCS}).
+        Frame: BCS
+        计算边界点的法向量。
+        :param points: 边界点的坐标 (Nx3 的张量)。
+        :return: 法向量 (Nx3 的张量)。
         """
-        if self._shape == "ellipsoid":
-            a, b, c = self._shape_param["a"], self._shape_param["b"], self._shape_param["c"]
-            center = [a/2, 0, 0]
+        if self.shape == "ellipsoid":
+            a, b, c = self.params["a"], self.params["b"], self.params["c"]
             normals = np.stack([
-                2 * (points[:, 0] - center[0]) / a**2,
-                2 * (points[:, 1] - center[1]) / b**2,
-                2 * (points[:, 2] - center[2]) / c**2
+                2 * (points[:, 0] - self.center[0]) / a**2,
+                2 * (points[:, 1] - self.center[1]) / b**2,
+                2 * (points[:, 2] - self.center[2]) / c**2
             ], dim=-1)
-        elif self._shape == "plate":
-            normals = np.array([[0.0, 1, 0.0]], dtype=np.float32).repeat(points.shape[0], 1)
+        elif self.shape == "plate":
+            normals = np.array([[0.0, 0.0, 1.0]], dtype=np.float32).repeat(points.shape[0], 1)
         else:
             raise ValueError(f"Shape '{self.shape}' not supported for normals.")
         return normals / np.linalg.norm(normals, dim=-1, keepdim=True)  # 归一化
@@ -45,13 +55,12 @@ class WaterObject:
     def _calculate_rotation_potential(self, points):
         """
         Frame: BSC
-        计算旋转流势 χ_i 的几何贡献，不包含角速度。\\
-
+        计算旋转流势 χ_i 的几何贡献，不包含角速度。
         :param points: 边界点的坐标 (Nx3 的张量)。
         :return: 旋转流势的几何部分 (Nx3 的张量)。
         """
         normals = self._calculate_normals(points)
-        relative_positions = points
+        relative_positions = points - self.center
         rotation_contribution = np.cross(relative_positions, normals, dim=-1)  # r × n
         return rotation_contribution
 

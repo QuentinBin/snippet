@@ -3,35 +3,36 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-22 13:37:00
+LastEditTime: 2024-11-21 20:49:37
 '''
-import numpy as np
+import torch
+import numpy
+
+import torch
 
 class FluidDomain():
     def __init__(self, nx, ny, nz, length):
         """
         初始化流体域
-
-        :param nx,ny,nz: 网格数量
+        :param nx, ny, nz: 网格数量
         :param length: 流体域的物理长度
         """
         self.nx, self.ny, self.nz = nx, ny, nz
         self.length = length
         self.grid = self.create_3d_grid(nx, ny, nz, length)
-        self.phi = np.zeros((nx, ny, nz), dtype=np.float32)  # 速度势
-        self.chi = np.zeros((nx, ny, nz), dtype=np.float32)  # 速度势旋转部分
-        self.psi = np.zeros((nx, ny, nz), dtype=np.float32)  # 速度势平动部分
+        self.phi = torch.zeros((nx, ny, nz), dtype=torch.float32)  # 速度势
+        self.chi = torch.zeros((nx, ny, nz), dtype=torch.float32)  # 速度势旋转部分
+        self.psi = torch.zeros((nx, ny, nz), dtype=torch.float32)  # 速度势平动部分
 
     def create_3d_grid(self, nx, ny, nz, length):
         """
         创建三维流体网格
         """
-        x = np.linspace(-length, length, nx)
-        y = np.linspace(-length, length, ny)
-        z = np.linspace(-length, length, nz)
-        return np.stack(np.meshgrid(x, y, z), dim=-1)
-    
-    def 
+        x = torch.linspace(-length, length, nx)
+        y = torch.linspace(-length, length, ny)
+        z = torch.linspace(-length, length, nz)
+        return torch.stack(torch.meshgrid(x, y, z), dim=-1)
+
     def apply_boundary_conditions(self, boundary_value=1.0):
         """
         应用边界条件
