@@ -1,46 +1,67 @@
 import numpy as np
+import math
 
 class WaterObject:
-    def __init__(self, id=0, parent_id=None, shape=None, center=np.array([[0],[0],[0]]), velocity=np.array([[0],[0],[0]]), omega=np.array([[0],[0],[0]]), **kwargs):
+    def __init__(self, center=None, vertices=None, triangles=None, velocity=None, omega=None):
         """
         Frame: LCS 
         
         :param shape: String('ellipsoid', 'plate', etc.) 
-        :param center,velocity,omega: Array(3,1) 
         :param id,parent_id: int
         :param karwg: a=2.0, b=1.5, c=1.0 // l=1
         """
-        self._shape = shape
-        self._velocity = velocity
-        self._omega = omega
-        self._id = id
-        self._parent_id = parent_id
-        self._shape_param = kwargs
-        # Initialize Lie Group in {WCS}
+        # Initialize object's info  
+        self._center = np.array([0,0,0]) if center is None else center
+        # Initialize surface points
+        self._vertices = vertices if vertices is not None else np.zeros((0, 3), dtype=np.float32)
+        self._triangles = triangles if triangles is not None else np.zeros((0, 3), dtype=np.int32)
+        self._normals = self._calculate_normals()
+        self._global_normals = self._normals
+        # Initialize lie group and lie algebra in {WCS}
         self._SE3 = np.eye(4)
-        self._se3 = np.zeros([6,1])
-        self._se3_matrix = np.zeros([4,4])
+        self._se3 = np.zeros(6)
+        self._se3_matrix = np.zeros((4,4))
+        self._TransformMatrix_parent2link = np.eye(4)
+        # Initialize rotating info
+        self._omega = np.array([0,0,0], dtype=np.float32)
+
+        if velocity is not None:
+            self._se3[3:6] = np.array(velocity)
+
+    def _calculate_normals(self):
+        """
+        :return: 校正后的法向量 (Mx3 numpy 数组)。
+        """
+        # 取三角面的顶点
+        v0 = self._vertices[self._triangles[:, 0]]
+        v1 = self._vertices[self._triangles[:, 1]]
+        v2 = self._vertices[self._triangles[:, 2]]
+
+        # 计算未校正的法向量
+        normals = np.cross(v1 - v0, v2 - v0)  # 三角面法向量
+        norms = np.linalg.norm(normals, axis=1, keepdims=True)
+        normals = normals / norms  # 归一化
+
+        # 确定三角面的中心点
+        face_centers = np.array((v0 + v1 + v2) / 3.0)
+
+        # 计算从物体中心指向三角面中心的向量
+        center_to_face = face_centers - self._center
+        center_to_face /= np.linalg.norm(center_to_face, axis=1, keepdims=True)  # 归一化
+
+        # 校正法向量方向：检查是否与中心到面中心的方向一致
+        dot_products = np.sum(normals * center_to_face, axis=1)
+        normals[dot_products < 0] *= -1  # 若法向量指向内侧，翻转方向
+
+        return normals
+
+    def set_center(self, center):
+        self._center = center
     
-    def _calculate_normals(self, points):
-        """
-        计算边界点的法向量。 
-         
-        :param points: Boundary Point Array(Nx3,Frame{LCS}).
-        :return out: Normal Array(Nx3,Frame{LCS}).
-        """
-        if self._shape == "ellipsoid":
-            a, b, c = self._shape_param["a"], self._shape_param["b"], self._shape_param["c"]
-            center = [a/2, 0, 0]
-            normals = np.stack([
-                2 * (points[:, 0] - center[0]) / a**2,
-                2 * (points[:, 1] - center[1]) / b**2,
-                2 * (points[:, 2] - center[2]) / c**2
-            ], dim=-1)
-        elif self._shape == "plate":
-            normals = np.array([[0.0, 1, 0.0]], dtype=np.float32).repeat(points.shape[0], 1)
-        else:
-            raise ValueError(f"Shape '{self.shape}' not supported for normals.")
-        return normals / np.linalg.norm(normals, dim=-1, keepdim=True)  # 归一化
+    def set_rotate_value(self, rad, omega):
+        self._TransformMatrix_parent2link[:3,0] = np.array([math.cos(rad), -math.sin(rad), 0])
+        self._TransformMatrix_parent2link[:3,0] = np.array([math.sin(rad), math.cos(rad), 0])
+        self._omega[:,0] = np.array([0, 0, omega])
 
     def _calculate_rotation_potential(self, points):
         """
@@ -83,53 +104,31 @@ class WaterObject:
         return total_potential, rotation_geom, translation_geom
 
 
+    def update_boundary_conditions(self):
+        """
+        更新边界条件:
+        ∂χi/∂n = (ω × r) ⋅ n
+        ∂φi/∂n = v ⋅ n
+        """
+        self.boundary_conditions = []  # 重置边界条件
 
-class WaterSystem:
-    def __init__(self):
-        """初始化包含多个物体和关节的水中系统。"""
-        self.objects = []
-        self.joints = []
+        # 遍历每个三角面
+        for idth, triangle in enumerate(self._triangles):
+            vertices = self._vertices[triangle]  # 三角形顶点
+            boundary_center = vertices.mean(axis=0)
+            global_normal = self._global_normals[idth]
 
-    def add_object(self, obj):
-        """添加物体到系统。"""
-        self.objects.append(obj)
+            # 旋转引起的速度势 χi
+            r = self._SE3[:3,:3].dot(boundary_center) # 相对于中心的向量 [需要再全局坐标系下表示]
+            boundary_position = self._SE3[:3,:3].dot(boundary_center) + self._SE3[:3,3]
+            grad_chi = np.dot(np.cross(self._se3[:3], r), global_normal)
 
-    def add_joint(self, joint):
-        """添加关节到系统。"""
-        self.joints.append(joint)
+            # 平动引起的速度势 φi
+            grad_phi = np.dot(self._se3[3:6], global_normal)
 
-    def update(self, dt):
-        """更新系统的状态，包括物体和关节。"""
-        for joint in self.joints:
-            joint.update(dt)
-        for obj in self.objects:
-            obj.update_position(dt)
-
-    def boundary_conditions(self):
-        """计算系统中所有物体的边界条件。"""
-        conditions = []
-        for obj in self.objects:
-            conditions.append(obj.boundary_condition())
-        return conditions
-
-
-# 示例用法
-if __name__ == "__main__":
-    # 定义两个物体
-    parent = WaterObject(shape="ellipsoid", a=2.0, b=1.5, c=1.0, center=[0.0, 0.0, 0.0], velocity=[1.0, 0.0, 0.0])
-    child = WaterObject(shape="ellipsoid", a=1.0, b=0.8, c=0.5, center=[2.0, 0.0, 0.0], velocity=[0.0, 0.0, 0.0])
-
-    # 定义一个旋转关节
-    joint = RotationalJoint(parent, child, axis=[0, 0, 1], initial_angle=0.0, angular_velocity=np.pi / 4)
-
-    # 创建系统
-    system = WaterSystem()
-    system.add_object(parent)
-    system.add_object(child)
-    system.add_joint(joint)
-
-    # 模拟系统
-    dt = 0.1  # 时间步长
-    for t in range(10):  # 模拟 10 个时间步
-        system.update(dt)
-        print(f"Time {t*dt:.1f} s: Child Center = {child.center}")
+            # 存储边界条件
+            self.boundary_conditions.append({
+                "boundary_position": boundary_position,
+                "grad_chi": grad_chi,
+                "grad_phi": grad_phi
+            })
