@@ -3,10 +3,11 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-24 21:32:55
+LastEditTime: 2024-11-25 22:39:02
 '''
 import numpy as np
 from WaterObject import WaterObject
+import matplotlib.pyplot as plt
 
 class FluidDomain:
     def __init__(self, grid_resolution, domain_size):
@@ -25,7 +26,9 @@ class FluidDomain:
         self.grid = np.stack(np.meshgrid(x, y, z, indexing='ij'), axis=-1)  # [nx, ny, nz, 3]
 
         # 初始化速度势
-        self.potential = np.zeros(grid_resolution, dtype=float)
+        self.potential_chi = np.zeros(grid_resolution, dtype=float)
+        self.potential_psi = np.zeros(grid_resolution, dtype=float)
+        self.potential_phi = np.zeros(grid_resolution, dtype=float)
 
     def solve_laplace(self, assembly, tolerance=1e-4, max_iterations=1000):
         """
@@ -35,7 +38,8 @@ class FluidDomain:
         :param max_iterations: 最大迭代次数
         """
         # 初始猜测
-        potential = self.potential.copy()
+        potential_chi = self.potential_chi.copy()
+        potential_psi = self.potential_psi.copy()
 
         # 离散化步长
         dx = self.domain_size[0] / (self.grid_resolution[0] - 1)
@@ -44,13 +48,19 @@ class FluidDomain:
 
         # 迭代更新拉普拉斯方程
         for _ in range(max_iterations):
-            new_potential = potential.copy()
+            new_potential_chi = potential_chi.copy()
+            new_potential_psi = potential_psi.copy()
 
             # 离散拉普拉斯算子
-            new_potential[1:-1, 1:-1, 1:-1] = (
-                (potential[:-2, 1:-1, 1:-1] + potential[2:, 1:-1, 1:-1]) / dx**2 +
-                (potential[1:-1, :-2, 1:-1] + potential[1:-1, 2:, 1:-1]) / dy**2 +
-                (potential[1:-1, 1:-1, :-2] + potential[1:-1, 1:-1, 2:]) / dz**2
+            new_potential_chi[1:-1, 1:-1, 1:-1] = (
+                (potential_chi[:-2, 1:-1, 1:-1] + potential_chi[2:, 1:-1, 1:-1]) / dx**2 +
+                (potential_chi[1:-1, :-2, 1:-1] + potential_chi[1:-1, 2:, 1:-1]) / dy**2 +
+                (potential_chi[1:-1, 1:-1, :-2] + potential_chi[1:-1, 1:-1, 2:]) / dz**2
+            ) / (2 / dx**2 + 2 / dy**2 + 2 / dz**2)
+            new_potential_psi[1:-1, 1:-1, 1:-1] = (
+                (potential_psi[:-2, 1:-1, 1:-1] + potential_psi[2:, 1:-1, 1:-1]) / dx**2 +
+                (potential_psi[1:-1, :-2, 1:-1] + potential_psi[1:-1, 2:, 1:-1]) / dy**2 +
+                (potential_psi[1:-1, 1:-1, :-2] + potential_psi[1:-1, 1:-1, 2:]) / dz**2
             ) / (2 / dx**2 + 2 / dy**2 + 2 / dz**2)
 
             # 处理边界条件（流域内的物体）
@@ -75,7 +85,6 @@ class FluidDomain:
         """
         可视化流体域内的速度势切片
         """
-        import matplotlib.pyplot as plt
         plt.figure(figsize=(10, 8))
         plt.imshow(self.potential[:, :, self.grid_resolution[2] // 2], origin='lower', cmap='jet')
         plt.colorbar(label="Velocity Potential")

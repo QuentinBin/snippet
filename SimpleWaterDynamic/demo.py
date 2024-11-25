@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-22 14:36:11
-LastEditTime: 2024-11-25 13:34:09
+LastEditTime: 2024-11-25 22:10:54
 '''
 import numpy as np
 from FluidDomain import FluidDomain, Assembly
@@ -16,7 +16,7 @@ body_vertices, body_triangles = tools.generate_ellipsoid(2, 1, 0.5, resolution=1
 tail_vertices, tail_triangles = tools.generate_plate(2, 0.1, 0.5, resolution=100)
 
 # 创建物体
-body = WaterObject(vertices=body_vertices, triangles=body_triangles, velocity=[-1, 0, 0])
+body = WaterObject(vertices=body_vertices, triangles=body_triangles, velocity=[0, 0, 0])
 tail = WaterObject(vertices=tail_vertices, triangles=tail_triangles, velocity=[0, 0, 0])
 
 # 创建装配体
@@ -26,7 +26,7 @@ assembly.add_object(tail)
 assembly.add_joint(0, 1, joint_position=[2, 0, 0], joint_axis=[0, 0, 1])
 
 # 创建流体域
-domain = FluidDomain(grid_resolution=[200, 200, 200], domain_size=[10, 10, 10])
+domain = FluidDomain(grid_resolution=[50, 50, 50], domain_size=[10, 10, 10])
 
 # 模拟正弦摆动的鱼尾
 dt = 0.1
@@ -40,7 +40,6 @@ for t in np.arange(0, 2 * np.pi, dt):
 
     # 更新速度势边界条件
     assembly.update_boundary_conditions()
-    
     # 求解速度势
     domain.solve_laplace(assembly)
     
