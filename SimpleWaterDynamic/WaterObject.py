@@ -12,6 +12,7 @@ class WaterObject:
         """
         # Initialize object's info  
         self._center = np.array([0,0,0]) if center is None else center
+        self._inertia_matrix = np.zeros((6,6))
         # Initialize surface points
         self._vertices = vertices if vertices is not None else np.zeros((0, 3), dtype=np.float32)
         self._triangles = triangles if triangles is not None else np.zeros((0, 3), dtype=np.int32)
@@ -21,6 +22,7 @@ class WaterObject:
         # Initialize lie group and lie algebra in {WCS}
         self._SE3 = np.eye(4)
         self._se3 = np.zeros(6)
+        self._se3_local = np.zeros(6)
         self._se3_matrix = np.zeros((4,4))
         self._TransformMatrix_parent2link = np.eye(4)
         # Initialize rotating info
@@ -96,46 +98,28 @@ class WaterObject:
         self._TransformMatrix_parent2link[:3,0] = np.array([math.sin(rad), math.cos(rad), 0])
         self._omega[:,0] = np.array([0, 0, omega])
 
-    def _calculate_rotation_potential(self, points):
+    def compute_inertia_matrix(self, inertia_tensor, mass):
         """
-        Frame: BSC
-        计算旋转流势 χ_i 的几何贡献，不包含角速度。\\
-
-        :param points: 边界点的坐标 (Nx3 的张量)。
-        :return: 旋转流势的几何部分 (Nx3 的张量)。
+        Compute the 6x6 inertia matrix of a rigid body in SE(3).
+        
+        Args:
+            inertia_tensor (np.ndarray): A 3x3 inertia tensor matrix (relative to the center of mass).
+            mass (float): Mass of the rigid body.
+        
+        Returns:
+            np.ndarray: A 6x6 inertia matrix.
         """
-        normals = self._calculate_normals(points)
-        relative_positions = points
-        rotation_contribution = np.cross(relative_positions, normals, dim=-1)  # r × n
-        return rotation_contribution
-
-    def _calculate_translation_potential(self, points):
-        """
-        计算平动流势 ψ_i 的几何贡献，不包含速度。
-        :param points: 边界点的坐标 (Nx3 的张量)。
-        :return: 平动流势的几何部分 (Nx1 的张量)。
-        """
-        normals = self._calculate_normals(points)
-        return normals  # 平动部分只与法向量相关
-
-    def calculate_total_potential(self, points):
-        """
-        计算完整流势 φ，包括速度和角速度。
-        :param points: 边界点的坐标 (Nx3 的张量)。
-        :return: 总流势梯度 (Nx1 的张量), 几何旋转贡献(NX3), 几何平动贡献(NX3)
-        """
-        # 几何部分
-        rotation_geom = self._calculate_rotation_potential(points)  # 几何旋转贡献
-        translation_geom = self._calculate_translation_potential(points)  # 几何平动贡献
-
-        # 添加速度和角速度的权重
-        rotation_effect = np.sum(rotation_geom * self.omega, dim=-1, keepdim=True)
-        translation_effect = np.sum(translation_geom * self.velocity, dim=-1, keepdim=True)
-
-        # 合并平动和旋转的贡献
-        total_potential = rotation_effect + translation_effect
-        return total_potential, rotation_geom, translation_geom
-
+        # Validate inputs
+        assert inertia_tensor.shape == (3, 3), "Inertia tensor must be a 3x3 matrix"
+        assert isinstance(mass, (float, int)), "Mass must be a scalar"
+        
+        # Create 6x6 inertia matrix
+        inertia_matrix = np.zeros((6, 6))
+        inertia_matrix[:3, :3] = inertia_tensor  # Top-left: inertia tensor
+        inertia_matrix[3:, 3:] = mass * np.eye(3)  # Bottom-right: mass * identity matrix
+        
+        self._inertia_matrix = inertia_matrix
+        return inertia_matrix
 
     def update_boundary_conditions(self):
         """
@@ -168,7 +152,7 @@ class WaterObject:
                 "grad_psi": grad_psi,
                 "d_chi": d_chi,
                 "d_psi": d_psi,
-                "area": self._triangles_area[idth]
+                "area": self._triangles_area[idth],
                 "chi": None,
                 "psi": None,
             })

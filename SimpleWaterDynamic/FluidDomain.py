@@ -3,12 +3,12 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-28 20:12:46
+LastEditTime: 2024-11-29 00:37:51
 '''
 import numpy as np
 from WaterObject import WaterObject
 import matplotlib.pyplot as plt
-
+import tools
 
 class Assembly:
     def __init__(self):
@@ -78,7 +78,7 @@ class Assembly:
             child._SE3[:3,3] = position_global
             child._se3[:3] = parent._se3[:3] + omega * axis_global
             child._se3[3:6] = parent._se3[3:6] + np.cross(parent._se3[:3], position_global-parent._SE3[:3,3])
-
+            child._se3_local = np.array(0,0,omega,0,0,0)
         # 更新所有物体的平动 normals
         for obj in self.objects:
             obj._SE3[:3,3] += obj._se3[3:6] * dt
@@ -90,6 +90,66 @@ class Assembly:
         """
         for obj in self.objects:
             obj.update_boundary_conditions()
+
+    def _compute_added_inertia_matrix(self, obj_idx, obj_jdx,  fluid_density=1):
+        """
+        计算附加惯性矩阵 M^f_ij。
+        
+        返回：
+            M_f_ij: np.ndarray
+                附加惯性矩阵 \( 6 \times 6 \)。
+        """
+        # 处理边界条件（流域内的物体）
+        Theta_ij_chichi = np.zeros((3,3))
+        Theta_ij_chipsi = np.zeros((3,3))
+        Theta_ij_psichi = np.zeros((3,3))
+        Theta_ij_psipsi = np.zeros((3,3))
+        rho = fluid_density
+
+        if obj_idx == obj_jdx:
+            for bc in self.objects[obj_idx].boundary_conditions: 
+                chi = bc['chi']
+                psi = bc['psi']
+                d_chi = bc['d_chi']
+                d_psi = bc['d_psi']
+                area = bc['area']
+                Theta_ij_chichi += rho * np.dot(chi.reshape(3,1), d_chi.reshape(3,1).T) * area
+                Theta_ij_psipsi += rho * np.dot(psi.reshape(3,1), d_psi.reshape(3,1).T) * area
+                Theta_ij_chipsi += 0.5 * rho * (np.dot(chi.reshape(3,1), d_psi.reshape(3,1).T) + np.dot(d_chi.reshape(3,1), psi.reshape(3,1).T)) * area
+                Theta_ij_psichi += 0.5 * rho * (np.dot(psi.reshape(3,1), d_chi.reshape(3,1).T) + np.dot(d_psi.reshape(3,1), chi.reshape(3,1).T)) * area
+
+
+        # 组合矩阵
+        M_f_ij = np.block([
+            [Theta_ij_chichi, Theta_ij_chipsi],
+            [Theta_ij_psichi, Theta_ij_psipsi]
+        ])
+
+        return M_f_ij
+        
+    def _comput_I_matrix(self, obj_idx, obj_jdx):
+        I_matrix = np.zeros((6,6))
+
+        if obj_idx == obj_jdx:
+            I_matrix = self._compute_added_inertia_matrix(obj_idx, obj_jdx, 1) + self.objects[obj_idx]._inertia_matrix
+
+        return I_matrix
+    
+    def uodate_geometric_locomotion_velocity(self):
+
+        I_loc_matrix = np.zeros((6,6))
+        shape_momentum = np.zeros((6,6))
+        I_loc_matrix += self._comput_I_matrix(0,0) #base I matrix
+        obj_num = len(self.objects)
+        for i in range(1,obj_num):
+            adjoint_matrix = tools.adjoint_matrix(np.linalg.inv(self.objects[i]))
+            I_matrix_ii = self._comput_I_matrix(i,i)
+            I_loc_matrix += np.dot(adjoint_matrix.T, I_matrix_ii).dot(adjoint_matrix)
+            shape_momentum += np.dot(adjoint_matrix.T, I_matrix_ii).dot(self.objects[i]._se3_local)
+        
+        self.objects[0]._se3 = -np.linalg.inv(I_loc_matrix).dot(shape_momentum)
+        return self.objects[0]._se3
+
 
 
 class FluidDomain:
@@ -180,41 +240,7 @@ class FluidDomain:
         self.potential_psi = potential_psi
         self.potential_phi = potential_phi
 
-    def compute_added_inertia_matrix(self, obj_idx, obj_jdx, assembly:Assembly, fluid_density=1):
-        """
-        计算附加惯性矩阵 M^f_ij。
-        
-        返回：
-            M_f_ij: np.ndarray
-                附加惯性矩阵 \( 6 \times 6 \)。
-        """
-        # 处理边界条件（流域内的物体）
-        Theta_ij_chichi = np.zeros((3,3))
-        Theta_ij_chipsi = np.zeros((3,3))
-        Theta_ij_psichi = np.zeros((3,3))
-        Theta_ij_psipsi = np.zeros((3,3))
-        rho = fluid_density
-
-        if obj_idx == obj_jdx:
-            for bc in assembly[obj_idx].boundary_conditions: 
-                chi = bc['chi']
-                psi = bc['psi']
-                d_chi = bc['d_chi']
-                d_psi = bc['d_psi']
-                area = bc['area']
-                Theta_ij_chichi += rho * np.dot(chi.reshape(3,1), d_chi.reshape(3,1).T) * area
-                Theta_ij_psipsi += rho * np.dot(psi.reshape(3,1), d_psi.reshape(3,1).T) * area
-                Theta_ij_chipsi += 0.5 * rho * (np.dot(chi.reshape(3,1), d_psi.reshape(3,1).T) + np.dot(d_chi.reshape(3,1), psi.reshape(3,1).T)) * area
-                Theta_ij_psichi += 0.5 * rho * (np.dot(psi.reshape(3,1), d_chi.reshape(3,1).T) + np.dot(d_psi.reshape(3,1), chi.reshape(3,1).T)) * area
-
-
-        # 组合矩阵
-        M_f_ij = np.block([
-            [Theta_ij_chichi, Theta_ij_chipsi],
-            [Theta_ij_psichi, Theta_ij_psipsi]
-        ])
-
-        return M_f_ij
+    
         
     def compute_added_inertia_matrix(self, obj_idx, obj_jdx, assembly:Assembly, fluid_density=1):
         """
