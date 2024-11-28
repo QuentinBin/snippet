@@ -124,11 +124,12 @@ class WaterObject:
             grad_chi = np.dot(np.cross(self._se3[:3], r), global_normal)
 
             # 平动引起的速度势 φi
-            grad_phi = np.dot(self._se3[3:6], global_normal)
+            grad_psi = np.dot(self._se3[3:6], global_normal)
 
             # 存储边界条件
             self.boundary_conditions.append({
                 "boundary_position": boundary_position,
+                "boundary_normal": global_normal,
                 "grad_chi": grad_chi,
-                "grad_phi": grad_phi
+                "grad_psi": grad_psi
             })

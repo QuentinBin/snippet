@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-25 22:39:02
+LastEditTime: 2024-11-28 12:31:32
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -24,7 +24,7 @@ class FluidDomain:
         y = np.linspace(-domain_size[1] / 2, domain_size[1] / 2, grid_resolution[1])
         z = np.linspace(-domain_size[2] / 2, domain_size[2] / 2, grid_resolution[2])
         self.grid = np.stack(np.meshgrid(x, y, z, indexing='ij'), axis=-1)  # [nx, ny, nz, 3]
-
+        print('grid:',self.grid.shape)
         # 初始化速度势
         self.potential_chi = np.zeros(grid_resolution, dtype=float)
         self.potential_psi = np.zeros(grid_resolution, dtype=float)
@@ -40,6 +40,7 @@ class FluidDomain:
         # 初始猜测
         potential_chi = self.potential_chi.copy()
         potential_psi = self.potential_psi.copy()
+        potential_phi = self.potential_phi.copy()
 
         # 离散化步长
         dx = self.domain_size[0] / (self.grid_resolution[0] - 1)
@@ -50,6 +51,7 @@ class FluidDomain:
         for _ in range(max_iterations):
             new_potential_chi = potential_chi.copy()
             new_potential_psi = potential_psi.copy()
+            new_potential_phi = potential_phi.copy()
 
             # 离散拉普拉斯算子
             new_potential_chi[1:-1, 1:-1, 1:-1] = (
@@ -67,30 +69,40 @@ class FluidDomain:
             for obj in assembly.objects:
                 for bc in obj.boundary_conditions:
                     # 插值到最近的网格点并施加边界条件
-                    center = bc['boundary_position']
-                    idx = np.round((center + self.domain_size / 2) * self.grid_resolution / self.domain_size).astype(int)
-                    grad_chi = bc["grad_chi"]
-                    grad_phi = bc["grad_phi"]
-                    new_potential[tuple(idx)] = grad_chi + grad_phi
+                    boundary_position = bc['boundary_position']
+                    if(not True in np.isnan(bc['boundary_normal'])):
+                        boundary_neighbor_position = bc['boundary_position'] + bc['boundary_normal']
+                        boundary_idx = np.round((boundary_position + self.domain_size / 2) * self.grid_resolution / self.domain_size).astype(int)
+                        boundary_neighbor_idx = np.round((boundary_neighbor_position + self.domain_size / 2) * self.grid_resolution / self.domain_size).astype(int)
+                        # print(boundary_idx,boundary_neighbor_idx)
+                        grad_chi = bc["grad_chi"]
+                        grad_psi = bc["grad_psi"]
+                        new_potential_chi[tuple(boundary_neighbor_idx)] = new_potential_chi[tuple(boundary_idx)] + grad_chi 
+                        new_potential_psi[tuple(boundary_neighbor_idx)] = new_potential_psi[tuple(boundary_idx)] + grad_psi 
+            new_potential_phi = new_potential_psi + new_potential_chi
 
             # 检查收敛性
-            if np.max(np.abs(new_potential - potential)) < tolerance:
+            if np.max(np.abs(new_potential_phi - potential_phi)) < tolerance:
                 break
 
-            potential = new_potential
+            potential_chi = new_potential_chi
+            potential_psi = new_potential_psi
+            potential_phi = new_potential_phi
 
-        self.potential = potential
+        self.potential_chi = potential_chi
+        self.potential_psi = potential_psi
+        self.potential_phi = potential_phi
 
     def plot_potential(self):
         """
         可视化流体域内的速度势切片
         """
         plt.figure(figsize=(10, 8))
-        plt.imshow(self.potential[:, :, self.grid_resolution[2] // 2], origin='lower', cmap='jet')
+        plt.imshow(self.potential_phi[:, :, self.grid_resolution[2] // 2], origin='lower', cmap='jet')
         plt.colorbar(label="Velocity Potential")
         plt.title("Velocity Potential at Mid-Z Plane")
         plt.show()
-    
+
 
 class Assembly:
     def __init__(self):
