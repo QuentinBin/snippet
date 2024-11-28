@@ -17,6 +17,7 @@ class WaterObject:
         self._triangles = triangles if triangles is not None else np.zeros((0, 3), dtype=np.int32)
         self._normals = self._calculate_normals()
         self._global_normals = self._normals
+        self._triangles_area = self._compute_triangles_area_3d()
         # Initialize lie group and lie algebra in {WCS}
         self._SE3 = np.eye(4)
         self._se3 = np.zeros(6)
@@ -54,6 +55,38 @@ class WaterObject:
         normals[dot_products < 0] *= -1  # 若法向量指向内侧，翻转方向
 
         return normals
+    
+    def _compute_triangles_area_3d(self):
+        """
+        Calculate the areas of multiple triangles in 3D space.
+
+        Args:
+            points1, points2, points3 (np.ndarray): Each of shape (N, 3), representing
+                                                    the coordinates of the three vertices
+                                                    of N triangles.
+
+        Returns:
+            np.ndarray: Shape (N,), the areas of the triangles.
+        """
+        # Calculate edge vectors
+        # 取三角面的顶点
+        points1 = self._vertices[self._triangles[:, 0]]
+        points2 = self._vertices[self._triangles[:, 1]]
+        points3 = self._vertices[self._triangles[:, 2]]
+
+        v1 = points2 - points1  # Vector from points1 to points2
+        v2 = points3 - points1  # Vector from points1 to points3
+        
+        # Compute cross products
+        cross_products = np.cross(v1, v2)  # Shape (N, 3)
+        
+        # Compute the magnitudes of the cross products
+        cross_magnitudes = np.linalg.norm(cross_products, axis=1)  # Shape (N,)
+        
+        # Compute triangle areas
+        areas = 0.5 * cross_magnitudes
+        
+        return areas
 
     def set_center(self, center):
         self._center = center
@@ -122,9 +155,10 @@ class WaterObject:
             r = self._SE3[:3,:3].dot(boundary_center) # 相对于中心的向量 [需要再全局坐标系下表示]
             boundary_position = self._SE3[:3,:3].dot(boundary_center) + self._SE3[:3,3]
             grad_chi = np.dot(np.cross(self._se3[:3], r), global_normal)
-
+            d_chi = np.cross(r, global_normal)
             # 平动引起的速度势 φi
             grad_psi = np.dot(self._se3[3:6], global_normal)
+            d_psi = global_normal
 
             # 存储边界条件
             self.boundary_conditions.append({
@@ -132,6 +166,9 @@ class WaterObject:
                 "boundary_normal": global_normal,
                 "grad_chi": grad_chi,
                 "grad_psi": grad_psi,
+                "d_chi": d_chi,
+                "d_psi": d_psi,
+                "area": self._triangles_area[idth]
                 "chi": None,
                 "psi": None,
             })

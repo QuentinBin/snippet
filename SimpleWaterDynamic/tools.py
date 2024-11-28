@@ -1,3 +1,10 @@
+'''
+Description: None
+Author: Bin Peng
+Email: pb20020816@163.com
+Date: 2024-11-24 21:44:50
+LastEditTime: 2024-11-28 20:02:32
+'''
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -43,4 +50,6 @@ def generate_plate(x_len, y_len, z_len, resolution=10):
             triangles.append([idx1, idx2, idx3])
             triangles.append([idx2, idx4, idx3])
     return vertices, np.array(triangles)
+
+
 

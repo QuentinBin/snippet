@@ -3,11 +3,94 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-28 18:49:54
+LastEditTime: 2024-11-28 20:12:46
 '''
 import numpy as np
 from WaterObject import WaterObject
 import matplotlib.pyplot as plt
+
+
+class Assembly:
+    def __init__(self):
+        self.objects = []  # 存储所有连接的 WaterObject
+        self.joints = []   # 存储关节信息：每个关节连接两个物体
+
+    def add_object(self, water_object):
+        """添加单个物体到装配体中"""
+        self.objects.append(water_object)
+
+    def add_joint(self, obj1_idx, obj2_idx, joint_position=[0,0,0], joint_axis=[0,0,1]):
+        """
+        添加关节连接信息
+
+        :param obj1_idx: 第一个物体的索引 (父物体)
+        :param obj2_idx: 第二个物体的索引 (子物体)
+        :param joint_axis: 关节在父物体局部坐标系中的旋转轴 (3,)
+        :param joint_position: 关节在父物体局部坐标系中的位置 (3,)
+        :param joint_angular_velocity: 关节的角速度 (float)
+        """
+        self.joints.append({
+            "parent": obj1_idx,
+            "child": obj2_idx,
+            "axis": np.array(joint_axis, dtype=float),
+            "position": np.array(joint_position, dtype=float)
+        })
+
+    def update(self, dt, omega):
+        """
+        更新装配体中所有物体的位置和方向
+        :param dt: 时间步长
+        """
+        # # 初始化第一个物体的全局速度和角速度
+        # if self.objects:
+        #     self.objects[0].global_velocity = self.objects[0].velocity
+        #     self.objects[0].global_omega = self.objects[0].omega
+
+        for joint in self.joints:
+            # 获取关节信息
+            parent = self.objects[joint["parent"]]
+            child = self.objects[joint["child"]]
+            axis_local = joint["axis"]
+            position_local = joint["position"]
+
+            # 将关节的局部轴和位置转换到全局坐标系
+            axis_global = parent._SE3[:3,:3].dot(axis_local)
+            axis_global = axis_global / np.linalg.norm(axis_global)  # 归一化轴
+            position_global = parent._SE3[:3,:3].dot(position_local) + parent._SE3[:3,3]
+
+            # 计算关节旋转角度
+            theta = omega * dt
+
+            # 构造关节旋转矩阵 (Rodrigues公式)
+            K = np.array([
+                [0, -axis_global[2], axis_global[1]],
+                [axis_global[2], 0, -axis_global[0]],
+                [-axis_global[1], axis_global[0], 0]
+            ])
+            rotation_matrix = (
+                np.eye(3) +
+                np.sin(theta) * K +
+                (1 - np.cos(theta)) * np.dot(K, K)
+            )
+
+            # 更新子物体的方向
+            child._SE3[:3,:3] = rotation_matrix.dot(child._SE3[:3,:3])
+            child._SE3[:3,3] = position_global
+            child._se3[:3] = parent._se3[:3] + omega * axis_global
+            child._se3[3:6] = parent._se3[3:6] + np.cross(parent._se3[:3], position_global-parent._SE3[:3,3])
+
+        # 更新所有物体的平动 normals
+        for obj in self.objects:
+            obj._SE3[:3,3] += obj._se3[3:6] * dt
+            obj._global_normals = np.dot(obj._normals, obj._SE3[:3,:3].T)
+
+    def update_boundary_conditions(self):
+        """
+        更新所有物体的速度势边界条件
+        """
+        for obj in self.objects:
+            obj.update_boundary_conditions()
+
 
 class FluidDomain:
     def __init__(self, grid_resolution, domain_size):
@@ -97,7 +180,7 @@ class FluidDomain:
         self.potential_psi = potential_psi
         self.potential_phi = potential_phi
 
-    def compute_added_inertia(self, obj_idx, obj_jdx, assembly, fluid_density=1):
+    def compute_added_inertia_matrix(self, obj_idx, obj_jdx, assembly:Assembly, fluid_density=1):
         """
         计算附加惯性矩阵 M^f_ij。
         
@@ -110,44 +193,37 @@ class FluidDomain:
         Theta_ij_chipsi = np.zeros((3,3))
         Theta_ij_psichi = np.zeros((3,3))
         Theta_ij_psipsi = np.zeros((3,3))
-
-        if obj_idx == obj_idx:
-
-        # 解包边界信息
-        vertices_i, normals_i, areas_i = boundary_i["vertices"], boundary_i["normals"], boundary_i["area_elements"]
-        vertices_j, normals_j, areas_j = boundary_j["vertices"], boundary_j["normals"], boundary_j["area_elements"]
-
-        # 解包速度势
-        chi_i, dchi_i_dn = velocity_potentials["chi_i"], velocity_potentials["dchi_i_dn"]
-        chi_j, dchi_j_dn = velocity_potentials["chi_j"], velocity_potentials["dchi_j_dn"]
-        phi_i, dphi_i_dn = velocity_potentials["phi_i"], velocity_potentials["dphi_i_dn"]
-        phi_j, dphi_j_dn = velocity_potentials["phi_j"], velocity_potentials["dphi_j_dn"]
-
-        # 流体密度
         rho = fluid_density
 
-        # 计算矩阵分块
-        chi_chi_ij = rho * np.sum(chi_i[:, None] * dchi_j_dn[:, None] * areas_j[:, None], axis=0)
-        phi_phi_ij = rho * np.sum(phi_i[:, None] * dphi_j_dn[:, None] * areas_j[:, None], axis=0)
-        
-        chi_phi_ij = 0.5 * rho * (
-            np.sum(chi_i[:, None] * dphi_j_dn[:, None] * areas_j[:, None], axis=0) +
-            np.sum(dchi_i_dn[:, None] * phi_j[:, None] * areas_i[:, None], axis=0)
-        )
-        
-        phi_chi_ij = 0.5 * rho * (
-            np.sum(phi_i[:, None] * dchi_j_dn[:, None] * areas_j[:, None], axis=0) +
-            np.sum(dphi_i_dn[:, None] * chi_j[:, None] * areas_i[:, None], axis=0)
-        )
+        if obj_idx == obj_jdx:
+            for bc in assembly[obj_idx].boundary_conditions: 
+                chi = bc['chi']
+                psi = bc['psi']
+                d_chi = bc['d_chi']
+                d_psi = bc['d_psi']
+                area = bc['area']
+                Theta_ij_chichi += rho * np.dot(chi.reshape(3,1), d_chi.reshape(3,1).T) * area
+                Theta_ij_psipsi += rho * np.dot(psi.reshape(3,1), d_psi.reshape(3,1).T) * area
+                Theta_ij_chipsi += 0.5 * rho * (np.dot(chi.reshape(3,1), d_psi.reshape(3,1).T) + np.dot(d_chi.reshape(3,1), psi.reshape(3,1).T)) * area
+                Theta_ij_psichi += 0.5 * rho * (np.dot(psi.reshape(3,1), d_chi.reshape(3,1).T) + np.dot(d_psi.reshape(3,1), chi.reshape(3,1).T)) * area
+
 
         # 组合矩阵
         M_f_ij = np.block([
-            [chi_chi_ij, chi_phi_ij],
-            [phi_chi_ij, phi_phi_ij]
+            [Theta_ij_chichi, Theta_ij_chipsi],
+            [Theta_ij_psichi, Theta_ij_psipsi]
         ])
 
         return M_f_ij
         
+    def compute_added_inertia_matrix(self, obj_idx, obj_jdx, assembly:Assembly, fluid_density=1):
+        """
+        计算附加惯性矩阵 M^f_ij。
+        
+        返回：
+            M_f_ij: np.ndarray
+                附加惯性矩阵 \( 6 \times 6 \)。
+        """
 
     def plot_potential(self):
         """
@@ -159,86 +235,5 @@ class FluidDomain:
         plt.title("Velocity Potential at Mid-Z Plane")
         plt.show()
 
-
-class Assembly:
-    def __init__(self):
-        self.objects = []  # 存储所有连接的 WaterObject
-        self.joints = []   # 存储关节信息：每个关节连接两个物体
-
-    def add_object(self, water_object):
-        """添加单个物体到装配体中"""
-        self.objects.append(water_object)
-
-    def add_joint(self, obj1_idx, obj2_idx, joint_position=[0,0,0], joint_axis=[0,0,1]):
-        """
-        添加关节连接信息
-
-        :param obj1_idx: 第一个物体的索引 (父物体)
-        :param obj2_idx: 第二个物体的索引 (子物体)
-        :param joint_axis: 关节在父物体局部坐标系中的旋转轴 (3,)
-        :param joint_position: 关节在父物体局部坐标系中的位置 (3,)
-        :param joint_angular_velocity: 关节的角速度 (float)
-        """
-        self.joints.append({
-            "parent": obj1_idx,
-            "child": obj2_idx,
-            "axis": np.array(joint_axis, dtype=float),
-            "position": np.array(joint_position, dtype=float)
-        })
-
-    def update(self, dt, omega):
-        """
-        更新装配体中所有物体的位置和方向
-        :param dt: 时间步长
-        """
-        # # 初始化第一个物体的全局速度和角速度
-        # if self.objects:
-        #     self.objects[0].global_velocity = self.objects[0].velocity
-        #     self.objects[0].global_omega = self.objects[0].omega
-
-        for joint in self.joints:
-            # 获取关节信息
-            parent = self.objects[joint["parent"]]
-            child = self.objects[joint["child"]]
-            axis_local = joint["axis"]
-            position_local = joint["position"]
-
-            # 将关节的局部轴和位置转换到全局坐标系
-            axis_global = parent._SE3[:3,:3].dot(axis_local)
-            axis_global = axis_global / np.linalg.norm(axis_global)  # 归一化轴
-            position_global = parent._SE3[:3,:3].dot(position_local) + parent._SE3[:3,3]
-
-            # 计算关节旋转角度
-            theta = omega * dt
-
-            # 构造关节旋转矩阵 (Rodrigues公式)
-            K = np.array([
-                [0, -axis_global[2], axis_global[1]],
-                [axis_global[2], 0, -axis_global[0]],
-                [-axis_global[1], axis_global[0], 0]
-            ])
-            rotation_matrix = (
-                np.eye(3) +
-                np.sin(theta) * K +
-                (1 - np.cos(theta)) * np.dot(K, K)
-            )
-
-            # 更新子物体的方向
-            child._SE3[:3,:3] = rotation_matrix.dot(child._SE3[:3,:3])
-            child._SE3[:3,3] = position_global
-            child._se3[:3] = parent._se3[:3] + omega * axis_global
-            child._se3[3:6] = parent._se3[3:6] + np.cross(parent._se3[:3], position_global-parent._SE3[:3,3])
-
-        # 更新所有物体的平动 normals
-        for obj in self.objects:
-            obj._SE3[:3,3] += obj._se3[3:6] * dt
-            obj._global_normals = np.dot(obj._normals, obj._SE3[:3,:3].T)
-
-    def update_boundary_conditions(self):
-        """
-        更新所有物体的速度势边界条件
-        """
-        for obj in self.objects:
-            obj.update_boundary_conditions()
 
     
