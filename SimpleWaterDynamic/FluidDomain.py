@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-28 12:31:32
+LastEditTime: 2024-11-28 18:49:54
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -79,6 +79,10 @@ class FluidDomain:
                         grad_psi = bc["grad_psi"]
                         new_potential_chi[tuple(boundary_neighbor_idx)] = new_potential_chi[tuple(boundary_idx)] + grad_chi 
                         new_potential_psi[tuple(boundary_neighbor_idx)] = new_potential_psi[tuple(boundary_idx)] + grad_psi 
+
+                        # 更新boundary表面的速度势
+                        bc["chi"] = new_potential_chi
+                        bc["psi"] = new_potential_psi
             new_potential_phi = new_potential_psi + new_potential_chi
 
             # 检查收敛性
@@ -92,6 +96,58 @@ class FluidDomain:
         self.potential_chi = potential_chi
         self.potential_psi = potential_psi
         self.potential_phi = potential_phi
+
+    def compute_added_inertia(self, obj_idx, obj_jdx, assembly, fluid_density=1):
+        """
+        计算附加惯性矩阵 M^f_ij。
+        
+        返回：
+            M_f_ij: np.ndarray
+                附加惯性矩阵 \( 6 \times 6 \)。
+        """
+        # 处理边界条件（流域内的物体）
+        Theta_ij_chichi = np.zeros((3,3))
+        Theta_ij_chipsi = np.zeros((3,3))
+        Theta_ij_psichi = np.zeros((3,3))
+        Theta_ij_psipsi = np.zeros((3,3))
+
+        if obj_idx == obj_idx:
+
+        # 解包边界信息
+        vertices_i, normals_i, areas_i = boundary_i["vertices"], boundary_i["normals"], boundary_i["area_elements"]
+        vertices_j, normals_j, areas_j = boundary_j["vertices"], boundary_j["normals"], boundary_j["area_elements"]
+
+        # 解包速度势
+        chi_i, dchi_i_dn = velocity_potentials["chi_i"], velocity_potentials["dchi_i_dn"]
+        chi_j, dchi_j_dn = velocity_potentials["chi_j"], velocity_potentials["dchi_j_dn"]
+        phi_i, dphi_i_dn = velocity_potentials["phi_i"], velocity_potentials["dphi_i_dn"]
+        phi_j, dphi_j_dn = velocity_potentials["phi_j"], velocity_potentials["dphi_j_dn"]
+
+        # 流体密度
+        rho = fluid_density
+
+        # 计算矩阵分块
+        chi_chi_ij = rho * np.sum(chi_i[:, None] * dchi_j_dn[:, None] * areas_j[:, None], axis=0)
+        phi_phi_ij = rho * np.sum(phi_i[:, None] * dphi_j_dn[:, None] * areas_j[:, None], axis=0)
+        
+        chi_phi_ij = 0.5 * rho * (
+            np.sum(chi_i[:, None] * dphi_j_dn[:, None] * areas_j[:, None], axis=0) +
+            np.sum(dchi_i_dn[:, None] * phi_j[:, None] * areas_i[:, None], axis=0)
+        )
+        
+        phi_chi_ij = 0.5 * rho * (
+            np.sum(phi_i[:, None] * dchi_j_dn[:, None] * areas_j[:, None], axis=0) +
+            np.sum(dphi_i_dn[:, None] * chi_j[:, None] * areas_i[:, None], axis=0)
+        )
+
+        # 组合矩阵
+        M_f_ij = np.block([
+            [chi_chi_ij, chi_phi_ij],
+            [phi_chi_ij, phi_phi_ij]
+        ])
+
+        return M_f_ij
+        
 
     def plot_potential(self):
         """
@@ -184,7 +240,5 @@ class Assembly:
         """
         for obj in self.objects:
             obj.update_boundary_conditions()
-        
-
 
     

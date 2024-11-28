@@ -131,5 +131,7 @@ class WaterObject:
                 "boundary_position": boundary_position,
                 "boundary_normal": global_normal,
                 "grad_chi": grad_chi,
-                "grad_psi": grad_psi
+                "grad_psi": grad_psi,
+                "chi": None,
+                "psi": None,
             })
