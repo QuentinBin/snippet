@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-29 12:17:59
+LastEditTime: 2024-11-29 15:01:18
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -16,7 +16,7 @@ class Assembly:
         self.joints = []   # 存储关节信息：每个关节连接两个物体
 
     def add_object(self, water_object):
-        """添加单个物体到装配体中"""
+        """Adding"""
         self.objects.append(water_object)
 
     def add_joint(self, obj1_idx, obj2_idx, joint_position=[0,0,0], joint_axis=[0,0,1]):
@@ -41,10 +41,6 @@ class Assembly:
         更新装配体中所有物体的位置和方向
         :param dt: 时间步长
         """
-        # # 初始化第一个物体的全局速度和角速度
-        # if self.objects:
-        #     self.objects[0].global_velocity = self.objects[0].velocity
-        #     self.objects[0].global_omega = self.objects[0].omega
 
         for joint in self.joints:
             # 获取关节信息

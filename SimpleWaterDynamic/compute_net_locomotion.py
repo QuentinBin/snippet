@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-22 14:36:11
-LastEditTime: 2024-11-29 10:16:05
+LastEditTime: 2024-11-29 15:02:02
 '''
 import numpy as np
 from FluidDomain import FluidDomain, Assembly
@@ -44,8 +44,6 @@ for t in np.arange(0, 2 * np.pi, dt):
 
     assembly.update_geometric_locomotion_velocity() # update geometric locmotion velocities
 
-
-    
     # 可视化结果
     if t % (2 * dt) == 0:  # 每隔两步可视化一次
         print(f"Time: {t:.2f}")
