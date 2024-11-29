@@ -148,10 +148,10 @@ class WaterObject:
             self.boundary_conditions.append({
                 "boundary_position": boundary_position,
                 "boundary_normal": global_normal,
-                "grad_chi": grad_chi,
-                "grad_psi": grad_psi,
-                "d_chi": d_chi,
-                "d_psi": d_psi,
+                "grad_chi": grad_chi,  # Omega \dot ∂χ/∂n
+                "grad_psi": grad_psi,   # velocity \dot ∂ψ /∂n
+                "d_chi": d_chi,     # ∂χ/∂n
+                "d_psi": d_psi,     # ∂ψ/∂n
                 "area": self._triangles_area[idth],
                 "chi": None,
                 "psi": None,

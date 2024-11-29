@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-11-29 00:37:51
+LastEditTime: 2024-11-29 12:17:59
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -78,7 +78,7 @@ class Assembly:
             child._SE3[:3,3] = position_global
             child._se3[:3] = parent._se3[:3] + omega * axis_global
             child._se3[3:6] = parent._se3[3:6] + np.cross(parent._se3[:3], position_global-parent._SE3[:3,3])
-            child._se3_local = np.array(0,0,omega,0,0,0)
+            child._se3_local = np.array([0,0,omega,0,0,0])
         # 更新所有物体的平动 normals
         for obj in self.objects:
             obj._SE3[:3,3] += obj._se3[3:6] * dt
@@ -113,10 +113,11 @@ class Assembly:
                 d_chi = bc['d_chi']
                 d_psi = bc['d_psi']
                 area = bc['area']
-                Theta_ij_chichi += rho * np.dot(chi.reshape(3,1), d_chi.reshape(3,1).T) * area
-                Theta_ij_psipsi += rho * np.dot(psi.reshape(3,1), d_psi.reshape(3,1).T) * area
-                Theta_ij_chipsi += 0.5 * rho * (np.dot(chi.reshape(3,1), d_psi.reshape(3,1).T) + np.dot(d_chi.reshape(3,1), psi.reshape(3,1).T)) * area
-                Theta_ij_psichi += 0.5 * rho * (np.dot(psi.reshape(3,1), d_chi.reshape(3,1).T) + np.dot(d_psi.reshape(3,1), chi.reshape(3,1).T)) * area
+                if(chi is not None and d_chi is not None and d_psi is not None and psi is not None):
+                    Theta_ij_chichi += rho * np.dot(chi.reshape(3,1), d_chi.reshape(3,1).T) * area
+                    Theta_ij_psipsi += rho * np.dot(psi.reshape(3,1), d_psi.reshape(3,1).T) * area
+                    Theta_ij_chipsi += 0.5 * rho * (np.dot(chi.reshape(3,1), d_psi.reshape(3,1).T) + np.dot(d_chi.reshape(3,1), psi.reshape(3,1).T)) * area
+                    Theta_ij_psichi += 0.5 * rho * (np.dot(psi.reshape(3,1), d_chi.reshape(3,1).T) + np.dot(d_psi.reshape(3,1), chi.reshape(3,1).T)) * area
 
 
         # 组合矩阵
@@ -135,16 +136,17 @@ class Assembly:
 
         return I_matrix
     
-    def uodate_geometric_locomotion_velocity(self):
+    def update_geometric_locomotion_velocity(self):
 
         I_loc_matrix = np.zeros((6,6))
-        shape_momentum = np.zeros((6,6))
+        shape_momentum = np.zeros(6)
         I_loc_matrix += self._comput_I_matrix(0,0) #base I matrix
         obj_num = len(self.objects)
         for i in range(1,obj_num):
-            adjoint_matrix = tools.adjoint_matrix(np.linalg.inv(self.objects[i]))
+            adjoint_matrix = tools.adjoint_matrix(np.linalg.inv(self.objects[i]._SE3))
             I_matrix_ii = self._comput_I_matrix(i,i)
             I_loc_matrix += np.dot(adjoint_matrix.T, I_matrix_ii).dot(adjoint_matrix)
+            # print(self.objects[i]._se3_local)
             shape_momentum += np.dot(adjoint_matrix.T, I_matrix_ii).dot(self.objects[i]._se3_local)
         
         self.objects[0]._se3 = -np.linalg.inv(I_loc_matrix).dot(shape_momentum)
@@ -169,8 +171,8 @@ class FluidDomain:
         self.grid = np.stack(np.meshgrid(x, y, z, indexing='ij'), axis=-1)  # [nx, ny, nz, 3]
         print('grid:',self.grid.shape)
         # 初始化速度势
-        self.potential_chi = np.zeros(grid_resolution, dtype=float)
-        self.potential_psi = np.zeros(grid_resolution, dtype=float)
+        self.potential_chi = np.zeros((self.grid_resolution[0],self.grid_resolution[1],self.grid_resolution[2],3), dtype=float)
+        self.potential_psi = np.zeros((self.grid_resolution[0],self.grid_resolution[1],self.grid_resolution[2],3), dtype=float)
         self.potential_phi = np.zeros(grid_resolution, dtype=float)
 
     def solve_laplace(self, assembly, tolerance=1e-4, max_iterations=1000):
@@ -197,15 +199,15 @@ class FluidDomain:
             new_potential_phi = potential_phi.copy()
 
             # 离散拉普拉斯算子
-            new_potential_chi[1:-1, 1:-1, 1:-1] = (
-                (potential_chi[:-2, 1:-1, 1:-1] + potential_chi[2:, 1:-1, 1:-1]) / dx**2 +
-                (potential_chi[1:-1, :-2, 1:-1] + potential_chi[1:-1, 2:, 1:-1]) / dy**2 +
-                (potential_chi[1:-1, 1:-1, :-2] + potential_chi[1:-1, 1:-1, 2:]) / dz**2
+            new_potential_chi[1:-1, 1:-1, 1:-1, :] = (
+                (potential_chi[:-2, 1:-1, 1:-1, :] + potential_chi[2:, 1:-1, 1:-1, :]) / dx**2 +
+                (potential_chi[1:-1, :-2, 1:-1, :] + potential_chi[1:-1, 2:, 1:-1, :]) / dy**2 +
+                (potential_chi[1:-1, 1:-1, :-2, :] + potential_chi[1:-1, 1:-1, 2:, :]) / dz**2
             ) / (2 / dx**2 + 2 / dy**2 + 2 / dz**2)
-            new_potential_psi[1:-1, 1:-1, 1:-1] = (
-                (potential_psi[:-2, 1:-1, 1:-1] + potential_psi[2:, 1:-1, 1:-1]) / dx**2 +
-                (potential_psi[1:-1, :-2, 1:-1] + potential_psi[1:-1, 2:, 1:-1]) / dy**2 +
-                (potential_psi[1:-1, 1:-1, :-2] + potential_psi[1:-1, 1:-1, 2:]) / dz**2
+            new_potential_psi[1:-1, 1:-1, 1:-1, :] = (
+                (potential_psi[:-2, 1:-1, 1:-1, :] + potential_psi[2:, 1:-1, 1:-1, :]) / dx**2 +
+                (potential_psi[1:-1, :-2, 1:-1, :] + potential_psi[1:-1, 2:, 1:-1, :]) / dy**2 +
+                (potential_psi[1:-1, 1:-1, :-2, :] + potential_psi[1:-1, 1:-1, 2:, :]) / dz**2
             ) / (2 / dx**2 + 2 / dy**2 + 2 / dz**2)
 
             # 处理边界条件（流域内的物体）
@@ -220,13 +222,15 @@ class FluidDomain:
                         # print(boundary_idx,boundary_neighbor_idx)
                         grad_chi = bc["grad_chi"]
                         grad_psi = bc["grad_psi"]
-                        new_potential_chi[tuple(boundary_neighbor_idx)] = new_potential_chi[tuple(boundary_idx)] + grad_chi 
-                        new_potential_psi[tuple(boundary_neighbor_idx)] = new_potential_psi[tuple(boundary_idx)] + grad_psi 
+                        d_chi = bc["d_chi"]
+                        d_psi = bc["d_psi"]
+                        new_potential_phi[tuple(boundary_neighbor_idx)] = new_potential_phi[tuple(boundary_idx)] + grad_chi + grad_psi 
+                        new_potential_chi[boundary_neighbor_idx[0],boundary_neighbor_idx[1],boundary_neighbor_idx[2],:] = new_potential_chi[boundary_idx[0],boundary_idx[1],boundary_idx[2],:] + d_chi
+                        new_potential_psi[boundary_neighbor_idx[0],boundary_neighbor_idx[1],boundary_neighbor_idx[2],:] = new_potential_psi[boundary_idx[0],boundary_idx[1],boundary_idx[2],:] + d_psi
 
                         # 更新boundary表面的速度势
-                        bc["chi"] = new_potential_chi
-                        bc["psi"] = new_potential_psi
-            new_potential_phi = new_potential_psi + new_potential_chi
+                        bc["chi"] = new_potential_chi[boundary_idx[0],boundary_idx[1],boundary_idx[2],:]
+                        bc["psi"] = new_potential_psi[boundary_idx[0],boundary_idx[1],boundary_idx[2],:]
 
             # 检查收敛性
             if np.max(np.abs(new_potential_phi - potential_phi)) < tolerance:

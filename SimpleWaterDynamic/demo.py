@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-22 14:36:11
-LastEditTime: 2024-11-25 22:10:54
+LastEditTime: 2024-11-29 10:16:05
 '''
 import numpy as np
 from FluidDomain import FluidDomain, Assembly
@@ -35,13 +35,16 @@ for t in np.arange(0, 2 * np.pi, dt):
     joint_angle = 0.2 * np.sin(2 * np.pi * (t+dt)) - 0.2 * np.sin(2 * np.pi * t)
     omega = joint_angle / dt
 
-    # 更新装配体
-    assembly.update(dt, omega)
+    # TO DO
+    assembly.update(dt, omega) # update joint velocitys
 
-    # 更新速度势边界条件
-    assembly.update_boundary_conditions()
-    # 求解速度势
-    domain.solve_laplace(assembly)
+    assembly.update_boundary_conditions() # update boundary conditions 
+    
+    domain.solve_laplace(assembly)  # compute velocity potentials
+
+    assembly.update_geometric_locomotion_velocity() # update geometric locmotion velocities
+
+
     
     # 可视化结果
     if t % (2 * dt) == 0:  # 每隔两步可视化一次
