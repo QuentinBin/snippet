@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-24 21:44:50
-LastEditTime: 2024-11-29 00:14:20
+LastEditTime: 2024-12-02 20:55:51
 '''
 import numpy as np
 import matplotlib.pyplot as plt
@@ -125,5 +125,40 @@ def adjoint_matrix(g):
                      [S_p @ R, R]])
     
     return Ad_g
+
+def se3_adjoint_matrix(xi):
+    """
+    计算小写 se(3) 元素的伴随矩阵 ad
+    xi: 6x1 向量，前 3 元素为角速度 (omega)，后 3 元素为线速度 (v)
+    返回: 6x6 ad 矩阵
+    """
+    omega = xi[:3]  # 角速度部分
+    v = xi[3:]      # 平移速度部分
+
+    # 构造 ad 矩阵
+    ad_matrix = np.zeros((6, 6))
+    ad_matrix[:3, :3] = skew_symmetric(omega)  # 左上角
+    ad_matrix[3:, 3:] = skew_symmetric(omega)  # 右下角
+    ad_matrix[3:, :3] = skew_symmetric(v)      # 左下角
+    return ad_matrix
+
+def se3_adjoint_dual_matrix(xi):
+    """
+    计算小写 se(3) 元素的对偶伴随矩阵 ad^*
+    xi: 6x1 向量，前 3 元素为角速度 (omega)，后 3 元素为线速度 (v)
+    返回: 6x6 ad^* 矩阵
+    """
+    omega = xi[:3]  # 角速度部分
+    v = xi[3:]      # 平移速度部分
+
+    # 计算 -ad^* 矩阵分块
+    omega_skew = skew_symmetric(omega)
+    v_skew = skew_symmetric(v)
+
+    ad_star = np.zeros((6, 6))
+    ad_star[:3, :3] = -omega_skew.T  # 左上角
+    ad_star[:3, 3:] = -v_skew.T      # 右上角
+    ad_star[3:, 3:] = -omega_skew.T  # 右下角
+    return ad_star
 
 

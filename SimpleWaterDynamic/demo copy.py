@@ -1,84 +1,75 @@
-'''
-Description: None
-Author: Bin Peng
-Email: pb20020816@163.com
-Date: 2024-11-24 22:14:07
-LastEditTime: 2024-11-29 21:15:19
-'''
 import numpy as np
-from scipy.linalg import expm
-from scipy.integrate import solve_ivp
-
-# 定义 ad^T 矩阵的函数
-def adT_matrix(xi_alpha):
-    """
-    根据 xi_alpha 计算 ad^T 矩阵。
-    xi_alpha: 列向量或数组
-    返回: ad^T 矩阵 (numpy array)
-    """
-    # 示例：假设 xi_alpha 是 3x1 向量（如刚体角速度）
-    return np.array([
-        [0, -xi_alpha[2], xi_alpha[1]],
-        [xi_alpha[2], 0, -xi_alpha[0]],
-        [-xi_alpha[1], xi_alpha[0], 0]
-    ])
-
-# 定义外力项 Fξ 的函数
-def external_force(t):
-    """
-    外力项 Fξ 作为时间的函数。
-    t: 时间
-    返回: 外力项向量
-    """
-    return np.array([np.sin(t), np.cos(t), 0])  # 示例外力
-
-# 定义微分方程
-def odesys(t, h_alpha, xi_alpha):
-    """
-    微分方程的右侧
-    t: 时间
-    h_alpha: 当前状态变量
-    xi_alpha: 系统的速度或参数
-    返回: dh_alpha/dt
-    """
-    adT = adT_matrix(xi_alpha)
-    F_xi = external_force(t)
-    return adT @ h_alpha + F_xi
-
-# 初始条件
-h_alpha_0 = np.array([1.0, 0.0, 0.0])  # 初始 h_alpha
-xi_alpha = np.array([0.0, 0.0, 1.0])  # 假设 xi_alpha 为常值
-
-# 时间范围
-t_span = (0, 10)  # 时间范围 [0, 10]
-t_eval = np.linspace(t_span[0], t_span[1], 500)  # 评估点
-
-# 求解
-solution = solve_ivp(
-    fun=lambda t, h: odesys(t, h, xi_alpha),
-    t_span=t_span,
-    y0=h_alpha_0,
-    t_eval=t_eval,
-    method='RK45'  # Runge-Kutta 方法
-)
-
-# 提取结果
-t = solution.t  # 时间
-h_alpha = solution.y.T  # 状态向量 (每行为 h_alpha)
-
-# 打印结果
-for i, (time, h) in enumerate(zip(t, h_alpha)):
-    if i % 50 == 0:  # 每隔若干步打印
-        print(f"t = {time:.2f}, h_alpha = {h}")
-
-# 可视化结果 (可选)
 import matplotlib.pyplot as plt
-plt.plot(t, h_alpha[:, 0], label=r'$h_{\alpha,1}$')
-plt.plot(t, h_alpha[:, 1], label=r'$h_{\alpha,2}$')
-plt.plot(t, h_alpha[:, 2], label=r'$h_{\alpha,3}$')
-plt.xlabel('Time')
-plt.ylabel(r'$h_\alpha$')
-plt.legend()
-plt.title('Solution of $\dot{h}_\\alpha = ad^T_{\\xi_\\alpha} h_\\alpha + F_\\xi$')
-plt.grid()
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib.animation import FuncAnimation
+
+# 网格参数
+Lx, Ly = 10, 10  # 空间范围（x, y方向）
+Nx, Ny = 30, 30  # 网格分辨率（每个方向的网格数量）
+k = 2 * np.pi / Lx  # 波数
+omega = 2 * np.pi / 5  # 频率（假设周期为5秒）
+phi = 0  # 初始相位
+A = 1  # 振幅
+dt = 0.1  # 时间步长
+T = 5  # 动画时长
+
+# 创建空间网格
+x = np.linspace(0, Lx, Nx)
+y = np.linspace(0, Ly, Ny)
+X, Y = np.meshgrid(x, y)
+
+# 计算每个网格的位移（波动模型）
+def displacement(X, Y, t):
+    return A * np.sin(k * X - omega * t + phi)
+
+# 计算法向量（使用相邻顶点计算叉积）
+def compute_normals(X, Y, Z):
+    # 计算相邻网格点之间的向量
+    dx = X[1:, 1:] - X[:-1, :-1]
+    dy = Y[1:, 1:] - Y[:-1, :-1]
+    dz = Z[1:, 1:] - Z[:-1, :-1]
+
+    # 计算法向量：通过叉积得到每个三角形网格的法向量
+    normal_x = dy * dz
+    normal_y = dz * dx
+    normal_z = dx * dy
+    
+    return normal_x, normal_y, normal_z
+
+# 创建动画
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+ax.set_xlim(0, Lx)
+ax.set_ylim(0, Ly)
+ax.set_zlim(-1, 1)
+
+# 动画更新函数
+def update(t):
+    ax.clear()
+    
+    # 计算位移
+    Z_disp = displacement(X, Y, t)
+    
+    # 计算新的Z坐标（加上位移）
+    Z_new = Z_disp
+
+    # 计算法向量
+    normal_x, normal_y, normal_z = compute_normals(X, Y, Z_new)
+
+    # 绘制波动的鳍表面
+    ax.plot_surface(X, Y, Z_new, cmap='viridis', edgecolor='none', alpha=0.7)
+
+    # 绘制法向量箭头（可选）
+    # ax.quiver(X[::2, ::2], Y[::2, ::2], Z_new[::2, ::2], normal_x[::2, ::2], normal_y[::2, ::2], normal_z[::2, ::2], length=0.2, color='r')
+
+    # 设置标题和坐标轴
+    ax.set_title(f"Wave on Fin at Time t = {t:.2f} s")
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+# 创建动画
+ani = FuncAnimation(fig, update, frames=np.arange(0, T, dt), interval=100)
+
+# 显示动画
 plt.show()
