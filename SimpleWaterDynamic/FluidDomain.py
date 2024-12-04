@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-12-04 15:59:35
+LastEditTime: 2024-12-04 18:53:36
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -255,7 +255,7 @@ class FluidDomain:
                     # 插值到最近的网格点并施加边界条件
                     boundary_position = bc['boundary_position']
                     if(not True in np.isnan(bc['boundary_normal'])):
-                        boundary_neighbor_position = bc['boundary_position'] + bc['boundary_normal']
+                        boundary_neighbor_position = bc['boundary_position'] + bc['boundary_normal'] *4* self.domain_size[0] / self.grid_resolution[0]
                         boundary_idx = np.round((boundary_position + self.domain_size / 2 - assembly.objects[0]._SE3[3,:3]) * self.grid_resolution / self.domain_size).astype(int)
                         boundary_neighbor_idx = np.round((boundary_neighbor_position + self.domain_size / 2 - assembly.objects[0]._SE3[3,:3]) * self.grid_resolution / self.domain_size).astype(int)
                         # print(boundary_idx,boundary_neighbor_idx)
