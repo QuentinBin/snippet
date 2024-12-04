@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-24 21:44:50
-LastEditTime: 2024-12-02 20:55:51
+LastEditTime: 2024-12-04 13:22:57
 '''
 import numpy as np
 import matplotlib.pyplot as plt
@@ -34,8 +34,8 @@ def generate_ellipsoid(a, b, c, resolution=20):
 # 薄板生成函数
 def generate_plate(x_len, y_len, z_len, resolution=10):
     x = np.linspace( 0, x_len , resolution)
-    y = np.linspace(0, y_len , resolution)
-    z = np.array([-z_len / 2, z_len / 2])
+    y = np.array([-y_len / 2, y_len / 2])
+    z = np.linspace(-z_len / 2, z_len / 2 , resolution)
     xv, yv, zv = np.meshgrid(x, y, z, indexing="ij")
     vertices = np.vstack([xv.ravel(), yv.ravel(), zv.ravel()]).T
     

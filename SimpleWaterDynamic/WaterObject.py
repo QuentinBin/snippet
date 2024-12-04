@@ -155,4 +155,5 @@ class WaterObject:
                 "area": self._triangles_area[idth],
                 "chi": None,
                 "psi": None,
+                "phi": 0,
             })

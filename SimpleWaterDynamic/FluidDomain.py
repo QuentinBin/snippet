@@ -3,12 +3,16 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-12-02 21:15:23
+LastEditTime: 2024-12-04 15:59:35
 '''
 import numpy as np
 from WaterObject import WaterObject
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import tools
+import logging
+
+
 
 class Assembly:
     def __init__(self):
@@ -38,12 +42,12 @@ class Assembly:
             "position": np.array(joint_position, dtype=float)
         })
 
-    def update(self, dt, omega):
+    def update(self, dt, omega, theta):
         """
         更新装配体中所有物体的位置和方向
         :param dt: 时间步长
         """
-
+        print("rotate angle:", theta)
         for joint in self.joints:
             # 获取关节信息
             parent = self.objects[joint["parent"]]
@@ -56,10 +60,12 @@ class Assembly:
             axis_global = axis_global / np.linalg.norm(axis_global)  # 归一化轴
             position_global = parent._SE3[:3,:3].dot(position_local) + parent._SE3[:3,3]
 
-            # 计算关节旋转角度
-            theta = omega * dt
-
             # 构造关节旋转矩阵 (Rodrigues公式)
+            SE3_local = np.array([
+                [np.cos(theta), -np.sin(theta), 0],
+                [np.sin(theta), np.cos(theta), 0],
+                [0,0,1]
+            ])
             K = np.array([
                 [0, -axis_global[2], axis_global[1]],
                 [axis_global[2], 0, -axis_global[0]],
@@ -72,15 +78,19 @@ class Assembly:
             )
 
             # 更新子物体的方向
-            child._SE3[:3,:3] = rotation_matrix.dot(child._SE3[:3,:3])
+            child._SE3[:3,:3] = parent._SE3[:3,:3].dot(SE3_local)
             child._SE3[:3,3] = position_global
             child._se3[:3] = parent._se3[:3] + omega * axis_global
             child._se3[3:6] = parent._se3[3:6] + np.cross(parent._se3[:3], position_global-parent._SE3[:3,3])
             child._se3_local = np.array([0,0,omega,0,0,0])
         # 更新所有物体的平动 normals
-        for obj in self.objects:
+        for idx, obj in enumerate(self.objects):
             obj._SE3[:3,3] += obj._se3[3:6] * dt
+            print("object idx:", idx)
+            print("object position:", obj._SE3[:3,3])
+            print("object velocity:", obj._se3[3:6])
             obj._global_normals = np.dot(obj._normals, obj._SE3[:3,:3].T)
+        
 
     def update_boundary_conditions(self):
         """
@@ -152,11 +162,13 @@ class Assembly:
         obj_num = len(self.objects)
         for i in range(1,obj_num):
             adjoint_matrix = tools.adjoint_matrix(np.linalg.inv(self.objects[i]._SE3))
-            I_matrix_ii = self._comput_I_matrix(i,i)
+            I_matrix_ii = self._compute_I_matrix(i,i)
             I_loc_matrix += np.dot(adjoint_matrix.T, I_matrix_ii).dot(adjoint_matrix)
             # print(self.objects[i]._se3_local)
             shape_momentum += np.dot(adjoint_matrix.T, I_matrix_ii).dot(self.objects[i]._se3_local)
         
+        print("shape_momentum:", shape_momentum)
+        print("I_loc_matrix:", I_loc_matrix)
         self.objects[0]._se3 = -np.linalg.inv(I_loc_matrix).dot(shape_momentum)
         return self.objects[0]._se3
     
@@ -171,7 +183,7 @@ class Assembly:
         obj_num = len(self.objects)
         for i in range(1,obj_num):
             adjoint_matrix = tools.adjoint_matrix(np.linalg.inv(self.objects[i]._SE3))
-            I_matrix_ii = self._comput_I_matrix(i,i)
+            I_matrix_ii = self._compute_I_matrix(i,i)
             I_loc_matrix += np.dot(adjoint_matrix.T, I_matrix_ii).dot(adjoint_matrix)
             # print(self.objects[i]._se3_local)
             shape_momentum += np.dot(adjoint_matrix.T, I_matrix_ii).dot(self.objects[i]._se3_local)
@@ -244,8 +256,8 @@ class FluidDomain:
                     boundary_position = bc['boundary_position']
                     if(not True in np.isnan(bc['boundary_normal'])):
                         boundary_neighbor_position = bc['boundary_position'] + bc['boundary_normal']
-                        boundary_idx = np.round((boundary_position + self.domain_size / 2) * self.grid_resolution / self.domain_size).astype(int)
-                        boundary_neighbor_idx = np.round((boundary_neighbor_position + self.domain_size / 2) * self.grid_resolution / self.domain_size).astype(int)
+                        boundary_idx = np.round((boundary_position + self.domain_size / 2 - assembly.objects[0]._SE3[3,:3]) * self.grid_resolution / self.domain_size).astype(int)
+                        boundary_neighbor_idx = np.round((boundary_neighbor_position + self.domain_size / 2 - assembly.objects[0]._SE3[3,:3]) * self.grid_resolution / self.domain_size).astype(int)
                         # print(boundary_idx,boundary_neighbor_idx)
                         grad_chi = bc["grad_chi"]
                         grad_psi = bc["grad_psi"]
@@ -258,7 +270,7 @@ class FluidDomain:
                         # 更新boundary表面的速度势
                         bc["chi"] = new_potential_chi[boundary_idx[0],boundary_idx[1],boundary_idx[2],:]
                         bc["psi"] = new_potential_psi[boundary_idx[0],boundary_idx[1],boundary_idx[2],:]
-
+                        bc['phi'] = new_potential_phi[tuple(boundary_idx)]
             # 检查收敛性
             if np.max(np.abs(new_potential_phi - potential_phi)) < tolerance:
                 break
@@ -272,15 +284,6 @@ class FluidDomain:
         self.potential_phi = potential_phi
 
     
-        
-    def compute_added_inertia_matrix(self, obj_idx, obj_jdx, assembly:Assembly, fluid_density=1):
-        """
-        计算附加惯性矩阵 M^f_ij。
-        
-        返回：
-            M_f_ij: np.ndarray
-                附加惯性矩阵 \( 6 \times 6 \)。
-        """
 
     def plot_potential(self):
         """
@@ -292,5 +295,40 @@ class FluidDomain:
         plt.title("Velocity Potential at Mid-Z Plane")
         plt.show()
 
+    def plot_potential_assembly(self, assembly):
+        boundary_positions_xs = []
+        boundary_positions_ys = []
+        boundary_positions_zs = []
+        potentials = []
+        for obj in assembly.objects:
+                for bc in obj.boundary_conditions:
+                    boundary_position = bc['boundary_position']
+                    boundary_idx = np.round((boundary_position + self.domain_size / 2) * self.grid_resolution / self.domain_size).astype(int)
+                    boundary_positions_xs.append(boundary_idx[0]) 
+                    boundary_positions_ys.append(boundary_idx[1]) 
+                    boundary_positions_zs.append(boundary_idx[2]) 
+                    potentials.append(self.potential_phi[tuple(boundary_idx)])
 
-    
+        # 绘制散点图
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        # 创建散点图，使用速度势作为颜色
+        scatter = ax.scatter(boundary_positions_xs, boundary_positions_ys, boundary_positions_zs, c=potentials, cmap='viridis')
+
+        # 添加颜色条
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Velocity Potential')
+
+        # 设置轴标签
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+       
+        ax.set_xlim(15, 40)
+        ax.set_ylim(15, 40)
+        ax.set_zlim(15, 40)
+        ax.set_box_aspect([1, 1, 1])  # 保证三个轴的比例一致
+        # 显示图形
+        plt.show()
+        
