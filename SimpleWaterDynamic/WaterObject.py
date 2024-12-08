@@ -29,7 +29,7 @@ class WaterObject:
         self._omega = np.array([0,0,0], dtype=np.float32)
 
         if velocity is not None:
-            self._se3l[3:6] = np.array(velocity)
+            self._se3[3:6] = np.array(velocity)
 
     def _calculate_normals(self):
         """

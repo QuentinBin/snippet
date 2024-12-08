@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-22 14:36:11
-LastEditTime: 2024-12-09 00:54:25
+LastEditTime: 2024-12-09 02:32:45
 '''
 import numpy as np
 from FluidDomain import FluidDomain, Assembly
@@ -33,7 +33,7 @@ assembly.add_joint(0, 1, joint_position=[1, 0, 0], joint_axis=[0, 0, 1])
 domain = FluidDomain(grid_resolution=[50, 50, 50], domain_size=[5, 5, 5])
 
 # 模拟正弦摆动的鱼尾
-dt = 0.1
+dt = 0.01
 # 创建一个图形和坐标轴对象
 fig, ax = plt.subplots()
 
@@ -46,7 +46,7 @@ scatter, = ax.plot([], [])  # 'bo'表示蓝色圆点
 
 position_xs = []
 position_ys = []
-for t in np.arange(0, 10 * np.pi, dt):
+for t in np.arange(0, 5, dt):
     # 更新鱼尾关节角度  # 振幅为 1 rad，频率为 1 Hz
     freq = 2
     joint_angle = 0.7 * np.sin(2 * np.pi *freq* t)
@@ -62,8 +62,8 @@ for t in np.arange(0, 10 * np.pi, dt):
 
     assembly.update_geometric_locomotion_velocity() # update geometric locmotion velocities
     
-    position_xs.append(assembly.objects[0]._SE3[0,3])
-    position_ys.append(assembly.objects[0]._SE3[1,3])
+    position_xs.append(assembly.objects[0]._SE3[0,3]*100)
+    position_ys.append(assembly.objects[0]._SE3[1,3]*100)
     scatter.set_data(position_xs, position_ys)  # 更新数据
     plt.draw()  # 绘制更新的图形
     plt.pause(0.1)  # 暂停一段时间，便于看到更新

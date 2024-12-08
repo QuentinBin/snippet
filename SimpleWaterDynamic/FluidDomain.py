@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-12-09 01:58:32
+LastEditTime: 2024-12-09 02:26:21
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -80,13 +80,14 @@ class Assembly:
             # 更新子物体的方向
             child._SE3[:3,:3] = parent._SE3[:3,:3].dot(SE3_local)
             child._SE3[:3,3] = position_global
-            child._se3_local = np.array([0,0,omega,0,0,0])
             child._se3[:3] = parent._se3[:3] + omega * axis_global
             child._se3[3:6] = parent._se3[3:6] + np.cross(parent._se3[:3], position_global-parent._SE3[:3,3])
+            
 
             global_to_bodyi = np.linalg.inv(child._SE3)
             adjoint_matrix = tools.adjoint_matrix(global_to_bodyi)
             child._se3_fixed = np.dot(adjoint_matrix, child._se3)
+            child._se3_local = child._se3_fixed - np.dot(adjoint_matrix, self.objects[0]._se3)
 
         # 更新所有物体的平动 normals
         for idx, obj in enumerate(self.objects):
@@ -176,7 +177,8 @@ class Assembly:
         print("shape_momentum:", shape_momentum)
         print("I_loc_matrix_inv: \n", np.linalg.inv(I_loc_matrix))
         self.objects[0]._se3_fixed = -np.linalg.inv(I_loc_matrix).dot(shape_momentum)
-        return self.objects[0]._se3_fixed
+        self.objects[0]._se3 = np.dot(tools.adjoint_matrix(self.objects[0]._SE3), self.objects[0]._se3_fixed)
+        return self.objects[0]._se3
     
     def update_total_locomotion_velocity(self, F_ext, dt): # TO DO
         adjoint_dual_matrix = tools.se3_adjoint_dual_matrix(self.objects[0]._se3)
