@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-22 14:36:11
-LastEditTime: 2024-12-04 19:18:28
+LastEditTime: 2024-12-09 00:54:25
 '''
 import numpy as np
 from FluidDomain import FluidDomain, Assembly
@@ -20,7 +20,8 @@ tail_vertices, tail_triangles = tools.generate_plate(0.2, 0.02, 0.08, resolution
 # 创建物体
 body = WaterObject(vertices=body_vertices, triangles=body_triangles, velocity=[0, 0, 0])
 tail = WaterObject(vertices=tail_vertices, triangles=tail_triangles, velocity=[0, 0, 0])
-body.compute_inertia_matrix(tools.compute_ellipsoid_inertia(0.01, 0.4, 0.06, 0.09), .01)
+body.compute_inertia_matrix(tools.compute_ellipsoid_inertia(3, 0.4, 0.06, 0.09), 3)
+tail.compute_inertia_matrix(tools.compute_plate_inertia(0.15, 0.2, 0.02, 0.08), 0.15)
 
 # 创建装配体
 assembly = Assembly()

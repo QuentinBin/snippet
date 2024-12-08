@@ -20,16 +20,16 @@ class WaterObject:
         self._global_normals = self._normals
         self._triangles_area = self._compute_triangles_area_3d()
         # Initialize lie group and lie algebra in {WCS}
-        self._SE3 = np.eye(4)
-        self._se3 = np.zeros(6)
-        self._se3_local = np.zeros(6)
-        self._se3_matrix = np.zeros((4,4))
+        self._SE3 = np.eye(4) # Global SE3
+        self._se3 = np.zeros(6) # Global se3
+        self._se3_fixed = np.zeros(6) # Omega Velocity in Body-i-Fixed Frame
+        self._se3_local = np.zeros(6) # Omega Velocity in Body-i-Fixed Frame Caused by Interior Driven Reason
         self._TransformMatrix_parent2link = np.eye(4)
         # Initialize rotating info
         self._omega = np.array([0,0,0], dtype=np.float32)
 
         if velocity is not None:
-            self._se3[3:6] = np.array(velocity)
+            self._se3l[3:6] = np.array(velocity)
 
     def _calculate_normals(self):
         """
