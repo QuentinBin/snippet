@@ -3,7 +3,7 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-21 19:51:57
-LastEditTime: 2024-12-09 02:26:21
+LastEditTime: 2024-12-09 12:21:35
 '''
 import numpy as np
 from WaterObject import WaterObject
@@ -181,7 +181,7 @@ class Assembly:
         return self.objects[0]._se3
     
     def update_total_locomotion_velocity(self, F_ext, dt): # TO DO
-        adjoint_dual_matrix = tools.se3_adjoint_dual_matrix(self.objects[0]._se3)
+        adjoint_dual_matrix = tools.se3_adjoint_dual_matrix(self.objects[0]._se3_fixed)
         self.system_momentum += (np.dot(adjoint_dual_matrix, self.system_momentum) + F_ext) * dt
         self.system_momentums.append(self.system_momentum)
 
@@ -190,13 +190,15 @@ class Assembly:
         I_loc_matrix += self._compute_I_matrix(0,0) #base I matrix
         obj_num = len(self.objects)
         for i in range(1,obj_num):
-            adjoint_matrix = tools.adjoint_matrix(np.linalg.inv(self.objects[i]._SE3))
+            base_to_bodyi = np.dot(np.linalg.inv(self.objects[i]._SE3), self.objects[0]._SE3)
+            adjoint_matrix = tools.adjoint_matrix(base_to_bodyi)
             I_matrix_ii = self._compute_I_matrix(i,i)
             I_loc_matrix += np.dot(adjoint_matrix.T, I_matrix_ii).dot(adjoint_matrix)
             # print(self.objects[i]._se3_local)
             shape_momentum += np.dot(adjoint_matrix.T, I_matrix_ii).dot(self.objects[i]._se3_local)
         
-        self.objects[0]._se3 = np.linalg.inv(I_loc_matrix).dot(self.system_momentum-shape_momentum)
+        self.objects[0]._se3_fixed = np.linalg.inv(I_loc_matrix).dot(self.system_momentum-shape_momentum)
+        self.objects[0]._se3 = np.dot(tools.adjoint_matrix(self.objects[0]._SE3), self.objects[0]._se3_fixed)
         return self.objects[0]._se3
 
 

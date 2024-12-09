@@ -3,15 +3,15 @@ Description: None
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-22 14:36:11
-LastEditTime: 2024-12-09 02:32:45
+LastEditTime: 2024-12-09 12:49:10
 '''
 import numpy as np
-from FluidDomain import FluidDomain, Assembly
-from WaterObject import WaterObject
-import tools
 import logging
 import matplotlib.pyplot as plt
 
+from FluidDomain import FluidDomain, Assembly
+from WaterObject import WaterObject
+import tools
 
 # 构建鱼的几何
 body_vertices, body_triangles = tools.generate_ellipsoid(0.4, 0.06, 0.09, resolution=100)
@@ -37,9 +37,6 @@ dt = 0.01
 # 创建一个图形和坐标轴对象
 fig, ax = plt.subplots()
 
-# 设置坐标轴范围
-ax.set_xlim(-2, 2)
-ax.set_ylim(-2, 2)
 # 创建一个散点图对象，初始化为空
 scatter, = ax.plot([], [])  # 'bo'表示蓝色圆点
 
