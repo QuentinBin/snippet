@@ -1,9 +1,9 @@
 '''
-Description: None
+Description: 展示波动鳍
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-12-03 20:05:53
-LastEditTime: 2024-12-19 19:25:57
+LastEditTime: 2024-12-19 20:08:23
 '''
 import numpy as np
 import matplotlib.pyplot as plt

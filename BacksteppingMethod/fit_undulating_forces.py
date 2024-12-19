@@ -7,8 +7,8 @@ from matplotlib.animation import FuncAnimation
 
 
 def generate_undulating_fin_mesh_right(L_x, L_y, t, resolution=[30,30], amp=1, freq=1, n = 1 ,plot_flag=False):
-    x = np.linspace(0, L_x, resolution[0])
-    y = np.linspace(0, L_y, resolution[1])
+    x = np.linspace(0, L_x, resolution[0]+1)
+    y = np.linspace(0, L_y, resolution[1]+1)
     xs, ys = np.meshgrid(x, y)
     amplitude = (ys/L_y) * amp
     zs = amplitude * np.sin((-x+L_x)*n*2*np.pi / L_x - 2*np.pi*freq*t)
@@ -95,25 +95,25 @@ def generate_undulating_fin_mesh_right(L_x, L_y, t, resolution=[30,30], amp=1, f
 L_x, L_y = 0.3, 0.15  # 空间范围（x, y方向）
 Nx, Ny = 30, 15  # 网格分辨率（每个方向的网格数量）
 n = 1  # 波数
-freq = 1  # 频率（假设周期为5秒）
-amp = 0.1  # 最大振幅（位于鳍条的边缘）
-dt = 0.01  # 时间步长
 
+amps = np.linspace(0, 0.15, 301)
+freqs = np.linspace(0, 2, 41)
+amps_xs, freq_ys = np.meshgrid(amps, freqs)
+lift_forces = np.zeros((amps_xs.shape[0]*amps_xs.shape[1], 3))
+for i in range(amps_xs.shape[0]):
+    for j in range(amps_xs.shape[1]):
+        amp = amps_xs[i][j]
+        freq = freq_ys[i][j]
 
-drag_force_avg = 0
-for t in np.arange(0, 10, dt):
-    total_lift_force = 0
-    total_drag_force = np.zeros(3)
+        total_lift_force = np.zeros(3)
 
-    fin_vers, fin_tris, fin_norms, fin_areas, fin_vels = generate_undulating_fin_mesh_right(L_x, L_y, t, [Nx, Ny], amp, freq, n)
-    for tri_id,tri in enumerate(fin_tris):
-        tri_norm = fin_norms[tri_id]
-        tri_area = fin_areas[tri_id]
-        tri_vel = fin_vels[tri_id]
-        tri_ver = fin_vers[tri]
-        # 计算每个面上的lift and drag forces
-        tri_lift = tri_vel**2 * tri_area * np.array([-tri_norm[0], -tri_norm[1], 0])
-        total_lift_force += tri_lift
-    
-    drag_force_avg = (drag_force_avg*t + (total_lift_force * dt)) / (t+dt)
-    print(t, 'lift force:', drag_force_avg)
+        fin_vers, fin_tris, fin_norms, fin_areas, fin_vels = generate_undulating_fin_mesh_right(L_x, L_y, 0, [Nx, Ny], amp, freq, n)
+        for tri_id,tri in enumerate(fin_tris):
+            tri_norm = fin_norms[tri_id]
+            tri_area = fin_areas[tri_id]
+            tri_vel = fin_vels[tri_id]
+            tri_ver = fin_vers[tri]
+            # 计算每个面上的lift and drag forces
+            tri_lift = tri_vel**2 * tri_area * np.array([-tri_norm[0], -tri_norm[1], 0])
+            total_lift_force += tri_lift
+        lift_forces[i,:] = total_lift_force
