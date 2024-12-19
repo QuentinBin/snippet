@@ -50,7 +50,7 @@ def generate_undulating_fin_mesh_right(length, width,t , resolution=[30,30], amp
     y = np.linspace(-width, 0, resolution[1])
     xs, ys = np.meshgrid(x, y)
     amplitude = (-ys ) * amplitude
-    zs = amplitude * np.sin((length - x)*k* np.pi / length - omega * t + phi)
+    zs = amplitude * np.sin(-(length - x)*k* np.pi / length - omega * t + phi)
     vertices = np.vstack([xs.ravel(), ys.ravel(), zs.ravel()]).T
 
     triangles = []
