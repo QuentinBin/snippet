@@ -3,7 +3,7 @@ Description: 多连杆鱼的动力学建模
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-12-25 14:08:19
-LastEditTime: 2024-12-25 14:44:11
+LastEditTime: 2024-12-25 18:13:22
 '''
 import numpy as np
 
@@ -32,4 +32,5 @@ class BodyLinks():
     def set_global_se3(self, global_se3:np.array):
         self._global_se3 = global_se3
         return global_se3
+    
     #---------------------------------------------------#
