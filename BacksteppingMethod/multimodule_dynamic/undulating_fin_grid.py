@@ -105,7 +105,7 @@ dt = 0.01  # 时间步长
 
 drag_force_avg = 0
 
-freqs = [0.5, 0.6, 0.8, 1, 1.2]
+freqs = [0.1, 0.5, 0.6, 0.8, 1, 1.2]
 amps = [10/180*np.pi, 20/180*np.pi, 30/180*np.pi]
 lift_forces = []  # 用于存储升力数据
 freq_list = []  # 用于存储频率数据
