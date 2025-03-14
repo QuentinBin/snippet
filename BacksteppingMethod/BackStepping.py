@@ -3,7 +3,7 @@ Description: 基于李雅普诺夫的目标跟踪demo
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2024-11-20 12:41:48
-LastEditTime: 2025-03-03 14:46:02
+LastEditTime: 2025-03-12 13:02:30
 '''
 import numpy as np
 from matplotlib import pyplot as plt
@@ -17,7 +17,7 @@ class RobotDact:
 
         self.C_dx = 0.1445 + 0.1309 + 0.1070
         self.C_dy = 0.5 + 0.4098 + 0.2273
-        self.K_d = 6
+        self.K_d = .6
         self.rho = 1000
         
         # control params
@@ -88,6 +88,7 @@ class RobotDact:
     
     def dynamics(self, u, v, alpha_deg, alpha_ddot_deg, omega):
         """Compute the dynamics based on the given system of equations"""
+        
         
         # Compute forces from fu and fv
         f_u = self.fu(u, v)
