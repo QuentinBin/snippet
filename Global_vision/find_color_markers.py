@@ -2,46 +2,35 @@ import cv2
 import numpy as np
 from sklearn.cluster import KMeans
 
-def extract_color_centers(image, n_clusters=2):
-    """
-    使用KMeans提取黄色和红色色块的中心坐标。
-    
-    :param image: 输入图像（BGR格式）
-    :param n_clusters: KMeans聚类的簇数
-    :return: 黄色和红色色块的中心点坐标 [(x1, y1), (x2, y2), ...]
-    """
-    # 转换为HSV颜色空间
+def extract_color_centers(image):
+    """ 分别提取黄色和红色标志点的中心坐标 """
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
 
     # 颜色范围（HSV）
-    yellow_lower = np.array([20, 100, 100])
-    yellow_upper = np.array([30, 255, 255])
-
-    red_lower1 = np.array([0, 100, 100])
-    red_upper1 = np.array([10, 255, 255])
-    red_lower2 = np.array([170, 100, 100])
-    red_upper2 = np.array([180, 255, 255])
+    yellow_lower, yellow_upper = np.array([20, 100, 100]), np.array([30, 255, 255])
+    red_lower1, red_upper1 = np.array([0, 100, 100]), np.array([10, 255, 255])
+    red_lower2, red_upper2 = np.array([170, 100, 100]), np.array([180, 255, 255])
 
     # 颜色掩码
     mask_yellow = cv2.inRange(hsv, yellow_lower, yellow_upper)
-    mask_red1 = cv2.inRange(hsv, red_lower1, red_upper1)
-    mask_red2 = cv2.inRange(hsv, red_lower2, red_upper2)
-    mask_red = mask_red1 | mask_red2
+    mask_red = cv2.inRange(hsv, red_lower1, red_upper1) | cv2.inRange(hsv, red_lower2, red_upper2)
 
-    # 合并黄色和红色区域
-    mask = mask_yellow | mask_red
+    # 提取像素点坐标
+    yellow_points = np.column_stack(np.where(mask_yellow > 0))  # 黄色 (y, x)
+    red_points = np.column_stack(np.where(mask_red > 0))  # 红色 (y, x)
 
-    # 获取所有符合颜色的像素点坐标
-    points = np.column_stack(np.where(mask > 0))  # (y, x) 坐标
+    # KMeans 计算中心点
+    centers = {"yellow": None, "red": None}
+    
+    if len(yellow_points) > 0:
+        kmeans_yellow = KMeans(n_clusters=1, n_init=10)
+        kmeans_yellow.fit(yellow_points)
+        centers["yellow"] = tuple(map(int, kmeans_yellow.cluster_centers_[0][::-1]))  # (x, y)
 
-    # 进行KMeans聚类
-    if len(points) >= n_clusters:
-        kmeans = KMeans(n_clusters=n_clusters, n_init=10)
-        kmeans.fit(points)
-        centers = kmeans.cluster_centers_[:, ::-1]  # 转换为 (x, y)
-        centers = [tuple(map(int, c)) for c in centers]
-    else:
-        centers = []
+    if len(red_points) > 0:
+        kmeans_red = KMeans(n_clusters=1, n_init=10)
+        kmeans_red.fit(red_points)
+        centers["red"] = tuple(map(int, kmeans_red.cluster_centers_[0][::-1]))  # (x, y)
 
     return centers
 
@@ -66,9 +55,9 @@ cropped_image = image[y:y+h, x:x+w]
 cropped_image_b = cv2.bilateralFilter(cropped_image, 9, 75, 75)
 
 # k means聚类算法提取黄色区域
-centers = extract_color_centers(cropped_image_b, n_clusters=2)
-cv2.circle(cropped_image, centers[0], 5, (0, 255, 0), -1) # 绿色
-cv2.circle(cropped_image, centers[1], 5, (0, 0, 255), -1) # 红色
+centers = extract_color_centers(cropped_image_b)
+cv2.circle(cropped_image, centers['yellow'], 5, (0, 255, 0), -1) # 绿色
+cv2.circle(cropped_image, centers['red'], 5, (0, 0, 255), -1) # 红色
 
 
 # 展现裁剪图像滤波前后对比
