@@ -408,9 +408,7 @@ class PiZero(nn.Module, NoSyncBase):
         for i in range(bsz):
             image_indices = image_mask[i].nonzero(as_tuple=True)[0]
             num_image_tokens = len(image_indices)
-            final_embedding[i, image_indices] = scaled_image_features[
-                i, :num_image_tokens
-            ]
+            final_embedding[i, image_indices] = scaled_image_features[i, :num_image_tokens]
         return final_embedding
 
     def infer_action(
