@@ -3,18 +3,18 @@ Description: Single Matsuoka CPG with ReLU activation
 Author: Bin Peng
 Email: pb20020816@163.com
 Date: 2025-07-07 14:03:30
-LastEditTime: 2025-07-08 10:35:06
+LastEditTime: 2025-07-08 21:02:02
 '''
 import numpy as np
 import matplotlib.pyplot as plt
 
 # 模型参数
-T_total = 10.0
+T_total = 15.0
 dt = 0.001
 steps = int(T_total / dt)
 tau_r = 0.2
 tau_a = 0.2
-alpha = 2.0
+alpha = 2.5
 beta = 2
 
 # 初始化变量
@@ -32,16 +32,16 @@ for i in range(1, steps):
 
     # 🌀 动态改变输入频率和幅值
     if t_curr < 2.7:
-        A = 1.0
-        f = 3.0
+        tau_r = 0.5
+        tau_a = 0.5
+        u_ext = 1
     else:
-        A = 4.0
-        f = 0.5
-
-    u_ext = 1
-
+        tau_r = 0.5
+        tau_a = 0.1
+        u_ext = 3
+    
     # 动态方程（Matsuoka 神经元核心）
-    dx1 = (-x1[i-1] - beta * v1[i-1] - alpha * y2[i-1] + u_ext) / tau_r
+    dx1 = (-x1[i-1] - beta * v1[i-1] - alpha * y2[i-1] + 0) / tau_r
     dx2 = (-x2[i-1] - beta * v2[i-1] - alpha * y1[i-1] + u_ext) / tau_r
 
     x1[i] = x1[i-1] + dx1 * dt
